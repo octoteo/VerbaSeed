@@ -11,6 +11,8 @@ class CurriculumPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final courses = ref.watch(installedCoursesProvider);
+    final importJobs = ref.watch(importJobsProvider);
+    final importRepository = ref.watch(importRepositoryProvider);
     final activeLearnerState = ref.watch(activeLearnerProvider);
     final activeLearner = activeLearnerState.asData?.value;
     final enrollmentState = activeLearner == null
@@ -20,6 +22,21 @@ class CurriculumPage extends ConsumerWidget {
             .map((enrollment) => enrollment.courseId)
             .toSet() ??
         const <String>{};
+    final installedSourceJobIds = courses.asData?.value
+            .map((course) => course.sourceJobId)
+            .whereType<String>()
+            .toSet() ??
+        const <String>{};
+    final acceptedDraftJobs = importJobs.asData?.value.where((job) {
+          if (installedSourceJobIds.contains(job.id)) return false;
+          try {
+            final source = importRepository.decodeSource(job);
+            return source.metadata['courseDraftStatus'] == 'accepted';
+          } on Object {
+            return false;
+          }
+        }).toList(growable: false) ??
+        const <ImportJob>[];
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -27,6 +44,59 @@ class CurriculumPage extends ConsumerWidget {
         Text('教材世界', style: Theme.of(context).textTheme.headlineMedium),
         const SizedBox(height: 8),
         const Text('导入、复核并安装到设备的课程会进入这里；课程数据与学习进度默认保存在本地。'),
+        if (acceptedDraftJobs.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          Text('待安装草稿', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 6),
+          const Text('这些草稿已经人工接受，但尚未成为正式的本地课程。'),
+          const SizedBox(height: 12),
+          for (var index = 0; index < acceptedDraftJobs.length; index++) ...[
+            _AcceptedDraftCard(
+              job: acceptedDraftJobs[index],
+              activeLearner: activeLearner,
+              itemCount: _metadataInt(
+                importRepository
+                    .decodeSource(acceptedDraftJobs[index])
+                    .metadata['compiledItemCount'],
+              ),
+              lessonCount: _metadataInt(
+                importRepository
+                    .decodeSource(acceptedDraftJobs[index])
+                    .metadata['compiledLessonCount'],
+              ),
+              onProfiles: () => context.push('/profiles'),
+              onInstall: activeLearner == null
+                  ? null
+                  : () async {
+                      try {
+                        final result = await ref
+                            .read(courseInstallationServiceProvider)
+                            .installAcceptedDraft(
+                              jobId: acceptedDraftJobs[index].id,
+                              learnerId: activeLearner.id,
+                            );
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              '课程已安装为 v${result.version}，并为 '
+                              '${activeLearner.displayName} 建立 '
+                              '${result.seededReviewCardCount} 张复习卡片',
+                            ),
+                          ),
+                        );
+                      } on Object catch (error) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('安装课程失败：$error')),
+                        );
+                      }
+                    },
+            ),
+            if (index != acceptedDraftJobs.length - 1)
+              const SizedBox(height: 12),
+          ],
+        ],
         const SizedBox(height: 24),
         Row(
           children: [
@@ -159,6 +229,83 @@ class CurriculumPage extends ConsumerWidget {
           ],
         ),
       ],
+    );
+  }
+
+  static int? _metadataInt(Object? value) => switch (value) {
+        final int result => result,
+        final num result => result.toInt(),
+        _ => null,
+      };
+}
+
+class _AcceptedDraftCard extends StatelessWidget {
+  const _AcceptedDraftCard({
+    required this.job,
+    required this.activeLearner,
+    required this.itemCount,
+    required this.lessonCount,
+    required this.onProfiles,
+    required this.onInstall,
+  });
+
+  final ImportJob job;
+  final LearnerProfile? activeLearner;
+  final int? itemCount;
+  final int? lessonCount;
+  final VoidCallback onProfiles;
+  final Future<void> Function()? onInstall;
+
+  @override
+  Widget build(BuildContext context) {
+    final counts = <String>[
+      if (lessonCount != null) '$lessonCount 个课节',
+      if (itemCount != null) '$itemCount 个学习项',
+    ].join(' · ');
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Wrap(
+          spacing: 16,
+          runSpacing: 12,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 620),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircleAvatar(child: Icon(Icons.verified_outlined)),
+                  const SizedBox(width: 14),
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(job.displayName, style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 4),
+                        Text(counts.isEmpty ? '已人工接受 · 等待安装' : '$counts · 已人工接受'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (activeLearner == null)
+              OutlinedButton.icon(
+                onPressed: onProfiles,
+                icon: const Icon(Icons.person_add_alt_1),
+                label: const Text('先选择学习者'),
+              )
+            else
+              FilledButton.icon(
+                onPressed: onInstall,
+                icon: const Icon(Icons.download_done_outlined),
+                label: Text('安装给 ${activeLearner!.displayName}'),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
