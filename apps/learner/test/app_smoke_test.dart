@@ -6,7 +6,7 @@ void main() {
     await tester.pumpWidget(const VerbaSeedApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('VerbaSeed'), findsWidgets);
+    expect(find.text('首页'), findsWidgets);
     expect(find.text('今天的学习路径'), findsOneWidget);
   });
 }
