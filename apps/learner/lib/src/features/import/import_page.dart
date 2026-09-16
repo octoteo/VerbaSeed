@@ -119,6 +119,7 @@ class ImportPage extends ConsumerWidget {
     if (file == null || !context.mounted) return;
     try {
       final bytes = await file.readAsBytes();
+      if (!context.mounted) return;
       await _persistAsset(
         context: context,
         assetStore: assetStore,
@@ -193,6 +194,7 @@ class ImportPage extends ConsumerWidget {
         throw FormatException('文件超过 ${maxBytes ~/ (1024 * 1024)} MiB 限制');
       }
       final bytes = await file.readAsBytes();
+      if (!context.mounted) return;
       final mimeType = lookupMimeType(
             file.name,
             headerBytes: bytes.take(32).toList(growable: false),
