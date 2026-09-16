@@ -41,12 +41,16 @@ Completed foundation:
 - Local bilingual pairing for adjacent/inline Chinese-English textbook text, target-text de-duplication and noise filtering
 - Durable course-draft JSON assets written only after document extraction is durable
 - Course-draft metadata with item/lesson counts, warnings and explicit review state without requiring an AI API
+- Local course-draft review page with editable course title, English text and Chinese translation
+- Removal of OCR false-positive learning items before a course can be accepted
+- Immutable reviewed course revisions written back to Content Store instead of mutating prior draft artifacts
+- Explicit human-accepted draft state that clears review flags without installing a course implicitly
 
 Next v0.2 increments:
 
-- Course-draft preview/edit/accept UI before installation
 - Render text-layer-empty PDF pages and feed them through the same OCR provider
-- Course installation tables separate from raw import jobs
+- Course installation tables separate from raw import jobs and accepted drafts
+- Generate learner review cards only from installed course versions
 - GitHub update checks with user-controlled upgrades and rollback
 - Backup/export/import of learner data and course manifests
 - Production Android signing and release-distribution workflow

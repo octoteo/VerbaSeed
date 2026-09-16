@@ -204,6 +204,9 @@ jobs:
       - run: echo "All required CI jobs passed for $GITHUB_SHA"
 
   vercel-deploy:
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'vercel-preview'))
     needs:
       - quality-gate
       - flutter-web
@@ -222,7 +225,7 @@ jobs:
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::VERCEL_TOKEN is not configured yet; Vercel Git deployment remains the temporary fallback."
+            echo "::notice::VERCEL_TOKEN is not configured; tested build artifact remains available from Actions."
           fi
       - name: Download exact tested web artifact
         if: steps.deploy-gate.outputs.enabled == 'true'
@@ -237,8 +240,20 @@ jobs:
         if: steps.deploy-gate.outputs.enabled == 'true'
         shell: bash
         run: |
+          set +e
           if [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF" == "refs/heads/main" ]]; then
-            vercel deploy --prebuilt --archive=tgz --yes --prod --token "$VERCEL_TOKEN"
+            output=$(vercel deploy --prebuilt --archive=tgz --yes --prod --token "$VERCEL_TOKEN" 2>&1)
           else
-            vercel deploy --prebuilt --archive=tgz --yes --token "$VERCEL_TOKEN"
+            output=$(vercel deploy --prebuilt --archive=tgz --yes --token "$VERCEL_TOKEN" 2>&1)
+          fi
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+
+          if [[ $status -ne 0 ]]; then
+            if grep -q 'api-deployments-free-per-day' <<<"$output"; then
+              echo "::warning::Vercel free-plan daily deployment quota is exhausted. The tested artifact is retained in GitHub Actions; deployment can be retried after the quota resets."
+              exit 0
+            fi
+            exit "$status"
           fi

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'features/curriculum/curriculum_page.dart';
 import 'features/explore/explore_page.dart';
 import 'features/home/home_page.dart';
+import 'features/import/course_draft_review_page.dart';
 import 'features/import/ocr_import_page.dart';
 import 'features/practice/sentence_typing_page.dart';
 import 'features/profiles/profiles_page.dart';
@@ -63,6 +64,12 @@ GoRouter createRouter() => GoRouter(
         GoRoute(
           path: '/practice/typing',
           builder: (context, state) => const SentenceTypingPage(),
+        ),
+        GoRoute(
+          path: '/import/draft/:jobId',
+          builder: (context, state) => CourseDraftReviewPage(
+            jobId: state.pathParameters['jobId']!,
+          ),
         ),
       ],
       errorBuilder: (context, state) => Scaffold(
