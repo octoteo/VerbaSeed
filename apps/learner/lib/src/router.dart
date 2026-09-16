@@ -8,6 +8,7 @@ import 'features/import/course_draft_review_page.dart';
 import 'features/import/ocr_import_page.dart';
 import 'features/practice/sentence_typing_page.dart';
 import 'features/profiles/profiles_page.dart';
+import 'features/settings/backup_restore_page.dart';
 import 'features/settings/github_course_updates_page.dart';
 import 'features/settings/settings_page.dart';
 import 'shell/app_shell.dart';
@@ -58,6 +59,10 @@ GoRouter createRouter() => GoRouter(
                       path: 'github-courses',
                       builder: (context, state) =>
                           const GitHubCourseUpdatesPage(),
+                    ),
+                    GoRoute(
+                      path: 'backup-restore',
+                      builder: (context, state) => const BackupRestorePage(),
                     ),
                   ],
                 ),
