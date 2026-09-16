@@ -30,14 +30,16 @@ Completed foundation:
 - User-selectable PDF page ranges with bounds validation
 - Durable extracted-document artifacts stored in Content Store before import completion
 - Text-layer-empty PDF detection for explicit OCR fallback
+- Native Android host scaffold with stable application namespace and camera capability declarations
+- CI release-APK build gate with downloadable Android artifact
 
 Next v0.2 increments:
 
-- Platform OCR/layout adapters for image imports and scanned PDFs, starting with a local/offline implementation
+- Offline Android OCR/layout adapter for image and camera imports, followed by scanned-PDF OCR fallback
 - Course installation tables separate from raw import jobs
 - GitHub update checks with user-controlled upgrades and rollback
 - Backup/export/import of learner data and course manifests
-- Android project scaffold and release build gate
+- Production Android signing and release-distribution workflow
 
 ## v0.3 — early learning content
 

@@ -40,6 +40,12 @@ Infrastructure adapters
 
 `pdf_extractor_pdfrx` is the first concrete document adapter. It extracts an existing PDF text layer and fragment geometry locally. The application coordinator persists the `extracting` state before invoking it, writes the normalized extraction result to the content-addressed Content Store, and marks the import successful only after that result is durable. PDFs without usable text are marked for the OCR fallback rather than being silently treated as successfully understood.
 
+## Platform hosts and release gates
+
+The Web host is deployed as a static Flutter application. Android has a checked-in Flutter host project with stable package/namespace `io.github.octoteo.verbaseed`, Java/Kotlin 17 settings and an explicit camera capability. Platform-specific document adapters must stay behind the same domain contracts so adding Android OCR does not change Web domain behavior.
+
+CI compiles a release-mode Android APK on every protected change and uploads it as a build artifact. This is a compile/integration gate, not a production signing scheme: repository builds currently use non-secret debug signing for the release-mode compilation. Production keystores and signing configuration must be supplied only by a later release workflow through protected secrets and must never be committed.
+
 ## Reliability model
 
 The application treats the local device as the source of truth for core learning data. Future cloud sync is replication, not ownership. Writes are durable locally before any optional remote synchronization is acknowledged.
