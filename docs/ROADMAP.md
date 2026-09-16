@@ -49,10 +49,11 @@ Completed foundation:
 - Immutable installed-course version history referencing content-addressed course artifacts
 - Per-learner course enrollment separate from device-wide course installation
 - Accepted-draft installation service that idempotently seeds FSRS review cards for the selected learner
+- Installed-course library UI with explicit pending-draft installation controls
+- Existing installed courses can be enrolled into additional learner profiles from the local library
 
 Next v0.2 increments:
 
-- Add install/enrollment controls and installed-course library UI
 - Render text-layer-empty PDF pages and feed them through the same OCR provider
 - Add installed-course version switching and rollback controls
 - GitHub update checks with user-controlled upgrades and rollback
