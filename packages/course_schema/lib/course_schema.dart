@@ -178,11 +178,8 @@ int? _intOrNull(Object? value) => switch (value) {
       _ => null,
     };
 
-List<Object?> _objectList(Object? value) => switch (value) {
-      final List<Object?> value => value,
-      final List value => List<Object?>.from(value),
-      _ => const [],
-    };
+List<Object?> _objectList(Object? value) =>
+    value is List ? List<Object?>.from(value) : const [];
 
 Map<String, Object?> _objectMap(Object? value) =>
     Map<String, Object?>.from(value! as Map);
