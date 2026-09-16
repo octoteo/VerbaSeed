@@ -19,13 +19,22 @@ final class CourseInstallationSummary {
 }
 
 final class CourseInstallationService {
-  const CourseInstallationService({
+  factory CourseInstallationService({
     required CourseDraftReviewService reviewService,
     required CourseInstallationRepository installationRepository,
     required ReviewRepository reviewRepository,
-  })  : _reviewService = reviewService,
-        _installationRepository = installationRepository,
-        _reviewRepository = reviewRepository;
+  }) =>
+      CourseInstallationService._(
+        reviewService,
+        installationRepository,
+        reviewRepository,
+      );
+
+  const CourseInstallationService._(
+    this._reviewService,
+    this._installationRepository,
+    this._reviewRepository,
+  );
 
   final CourseDraftReviewService _reviewService;
   final CourseInstallationRepository _installationRepository;
