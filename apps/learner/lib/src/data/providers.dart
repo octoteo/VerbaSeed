@@ -5,6 +5,7 @@ import 'package:local_store/local_store.dart';
 import 'package:ocr_google_mlkit/ocr_google_mlkit.dart';
 import 'package:pdf_extractor_pdfrx/pdf_extractor_pdfrx.dart';
 
+import 'backup_service.dart';
 import 'course_draft_review_service.dart';
 import 'course_installation_service.dart';
 import 'document_import_coordinator.dart';
@@ -60,6 +61,10 @@ final courseInstallationRepositoryProvider = Provider<CourseInstallationReposito
   (ref) => CourseInstallationRepository(ref.watch(databaseProvider)),
 );
 
+final backupRepositoryProvider = Provider<BackupRepository>(
+  (ref) => BackupRepository(ref.watch(databaseProvider)),
+);
+
 final documentImportCoordinatorProvider = Provider<DocumentImportCoordinator>(
   (ref) => DocumentImportCoordinator(
     repository: ref.watch(importRepositoryProvider),
@@ -93,6 +98,13 @@ final githubCourseSyncServiceProvider = Provider<GitHubCourseSyncService>(
     remote: ref.watch(githubCourseClientProvider),
     importRepository: ref.watch(importRepositoryProvider),
     installationRepository: ref.watch(courseInstallationRepositoryProvider),
+    assetStore: ref.watch(contentAssetStoreProvider),
+  ),
+);
+
+final verbaSeedBackupServiceProvider = Provider<VerbaSeedBackupService>(
+  (ref) => VerbaSeedBackupService(
+    backupRepository: ref.watch(backupRepositoryProvider),
     assetStore: ref.watch(contentAssetStoreProvider),
   ),
 );

@@ -63,10 +63,11 @@ Completed foundation:
 - Validated GitHub course imports can be explicitly materialized as content-addressed local course versions without auto-enrolling a learner
 - GitHub update checks are user-triggered and pin the preview to one resolved commit before any upgrade is confirmed
 - Confirmed GitHub upgrades install exactly the previewed commit, reject stale previews, preserve existing learner pins and remain rollbackable through local version history
+- Portable versioned JSON backup/export/import covers learner profiles, FSRS cards/events, learner course pins, installed-course history, referenced source provenance and every historical installed course manifest
+- Restore validates schema, references and SHA-256 course assets before replacing local state; database replacement is transactional and excludes ordinary transient import jobs
 
 Next v0.2 increments:
 
-- Backup/export/import of learner data and course manifests
 - Production Android signing and release-distribution workflow
 
 ## v0.3 — early learning content
