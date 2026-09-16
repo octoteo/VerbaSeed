@@ -37,9 +37,14 @@ Completed foundation:
 - Conditional Web stub that keeps unsupported OCR explicit instead of silently using a network service
 - Image/camera imports automatically enter the local OCR runner only after the original asset is durable
 - Visible OCR platform availability, retry/recovery controls and review-required status in the import experience
+- Deterministic extracted-document → Open Course draft compilation with page-preserving lessons
+- Local bilingual pairing for adjacent/inline Chinese-English textbook text, target-text de-duplication and noise filtering
+- Durable course-draft JSON assets written only after document extraction is durable
+- Course-draft metadata with item/lesson counts, warnings and explicit review state without requiring an AI API
 
 Next v0.2 increments:
 
+- Course-draft preview/edit/accept UI before installation
 - Render text-layer-empty PDF pages and feed them through the same OCR provider
 - Course installation tables separate from raw import jobs
 - GitHub update checks with user-controlled upgrades and rollback

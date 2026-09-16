@@ -41,6 +41,7 @@ final class DocumentImportCoordinator {
         _clock = clock ?? DateTime.now;
 
   static const extractionAssetMetadataKey = 'extractionAsset';
+  static const courseDraftAssetMetadataKey = 'courseDraftAsset';
 
   final ImportRepository _repository;
   final ContentAssetStore _assetStore;
@@ -186,8 +187,33 @@ final class DocumentImportCoordinator {
           mimeType: 'application/vnd.verbaseed.document-extraction+json',
         );
 
-        final completed = _stateMachine.succeed(state, at: _now());
         final emptyText = document.plainText.trim().isEmpty;
+        CourseDraftCompilation? compilation;
+        ContentAsset? courseDraftAsset;
+        String? compilationError;
+        if (!emptyText) {
+          try {
+            compilation = const CourseDraftCompiler().compileExtractedDocument(
+              document: document,
+              courseId: _courseIdForAsset(asset),
+              title: _courseTitleForAsset(asset),
+            );
+            final courseBytes = Uint8List.fromList(
+              utf8.encode(jsonEncode(compilation.course.toJson())),
+            );
+            courseDraftAsset = await _assetStore.put(
+              bytes: courseBytes,
+              fileName: '${asset.fileName}.course-draft.json',
+              mimeType: 'application/vnd.verbaseed.course+json',
+            );
+          } on Object catch (error) {
+            compilationError = '$error';
+          }
+        }
+
+        final completed = _stateMachine.succeed(state, at: _now());
+        final courseNeedsReview =
+            compilation?.requiresReview ?? (compilationError != null);
         final metadata = <String, Object?>{
           ...resolvedSource.metadata,
           extractionAssetMetadataKey: resultAsset.toJson(),
@@ -195,7 +221,19 @@ final class DocumentImportCoordinator {
           'extractedPageCount': document.pages.length,
           'extractedTextLength': document.plainText.length,
           emptyTextMetadataKey: emptyText,
-          if (emptyTextMetadataKey == 'ocrEmpty') 'requiresReview': emptyText,
+          'courseDraftStatus': emptyText
+              ? 'skipped'
+              : compilation != null
+                  ? 'ready'
+                  : 'needsReview',
+          if (courseDraftAsset != null)
+            courseDraftAssetMetadataKey: courseDraftAsset.toJson(),
+          if (compilation != null) ...compilation.toMetadata(),
+          'courseDraftError': ?compilationError,
+          if (emptyTextMetadataKey == 'ocrEmpty')
+            'requiresReview': emptyText || courseNeedsReview
+          else if (courseNeedsReview)
+            'requiresReview': true,
         };
         resolvedSource = resolvedSource.copyWith(
           metadata: withDocumentProcessingState(metadata, completed),
@@ -310,6 +348,21 @@ final class DocumentImportCoordinator {
         DocumentProcessingPhase.failed => ImportJobState.failed,
         DocumentProcessingPhase.cancelled => ImportJobState.cancelled,
       };
+
+  static String _courseIdForAsset(ContentAsset asset) {
+    final normalized = asset.id
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9._-]'), '-');
+    final prefixLength = normalized.length < 16 ? normalized.length : 16;
+    return 'import-${normalized.substring(0, prefixLength)}';
+  }
+
+  static String _courseTitleForAsset(ContentAsset asset) {
+    final name = asset.fileName.trim();
+    if (name.isEmpty) return 'Imported course';
+    final dot = name.lastIndexOf('.');
+    return dot > 0 ? name.substring(0, dot) : name;
+  }
 
   bool _sameState(
     DocumentProcessingState left,
