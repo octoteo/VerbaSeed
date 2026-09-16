@@ -35,10 +35,11 @@ Completed foundation:
 - Offline Google ML Kit text-recognition adapter for image and camera assets on Android/iOS
 - Normalized OCR layout blocks with durable extraction artifacts and explicit empty-result review metadata
 - Conditional Web stub that keeps unsupported OCR explicit instead of silently using a network service
+- Image/camera imports automatically enter the local OCR runner only after the original asset is durable
+- Visible OCR platform availability, retry/recovery controls and review-required status in the import experience
 
 Next v0.2 increments:
 
-- Connect the Android OCR provider to image/camera import actions and recovery UI
 - Render text-layer-empty PDF pages and feed them through the same OCR provider
 - Course installation tables separate from raw import jobs
 - GitHub update checks with user-controlled upgrades and rollback
