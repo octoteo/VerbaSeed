@@ -8,3 +8,6 @@ environment:
 
 dependencies:
   fsrs: ^2.0.0
+
+dev_dependencies:
+  test: ^1.32.0
