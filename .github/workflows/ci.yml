@@ -26,7 +26,7 @@ jobs:
           - packages/document_processing
           - packages/learning_engine
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
@@ -44,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -63,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -82,7 +82,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -108,7 +108,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -130,7 +130,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -158,7 +158,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -179,10 +179,66 @@ jobs:
       - name: Build web
         working-directory: apps/learner
         run: flutter build web --release
-      - name: Upload web artifact
+      - name: Prepare immutable Vercel Build Output
+        run: bash scripts/prepare_vercel_output.sh
+      - name: Upload tested Vercel output
         uses: actions/upload-artifact@v4
         with:
-          name: verbaseed-web
-          path: apps/learner/build/web
+          name: verbaseed-vercel-output
+          path: .vercel/output
           if-no-files-found: error
           retention-days: 14
+
+  quality-gate:
+    needs:
+      - dart-packages
+      - flutter-content-store
+      - flutter-ocr-mlkit
+      - flutter-pdf-extractor
+      - flutter-local-store
+      - flutter-android
+      - flutter-web
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - run: echo "All required CI jobs passed for $GITHUB_SHA"
+
+  vercel-deploy:
+    needs:
+      - quality-gate
+      - flutter-web
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_ORG_ID: team_bz21L8a9F0PgjBt9LPBxZWK2
+      VERCEL_PROJECT_ID: prj_9vst9iaa7S8XZjEUvNEMpNuFgpyd
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Detect external deployment configuration
+        id: deploy-gate
+        shell: bash
+        run: |
+          if [[ -n "${VERCEL_TOKEN:-}" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::VERCEL_TOKEN is not configured yet; Vercel Git deployment remains the temporary fallback."
+          fi
+      - name: Download exact tested web artifact
+        if: steps.deploy-gate.outputs.enabled == 'true'
+        uses: actions/download-artifact@v5
+        with:
+          name: verbaseed-vercel-output
+          path: .vercel/output
+      - name: Install pinned Vercel CLI
+        if: steps.deploy-gate.outputs.enabled == 'true'
+        run: npm install --global vercel@59.16.0
+      - name: Deploy exact tested artifact
+        if: steps.deploy-gate.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF" == "refs/heads/main" ]]; then
+            vercel deploy --prebuilt --archive=tgz --yes --prod --token "$VERCEL_TOKEN"
+          else
+            vercel deploy --prebuilt --archive=tgz --yes --token "$VERCEL_TOKEN"
+          fi
