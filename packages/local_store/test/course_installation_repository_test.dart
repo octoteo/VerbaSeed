@@ -61,6 +61,94 @@ void main() {
     expect(course.title, 'My revised course');
   });
 
+  test('new versions stay monotonic after rolling the default backward', () async {
+    await courses.installCourse(
+      courseId: 'course-1',
+      title: 'Course',
+      assetId: 'sha256:v1',
+      itemCount: 2,
+      lessonCount: 1,
+    );
+    await courses.installCourse(
+      courseId: 'course-1',
+      title: 'Course',
+      assetId: 'sha256:v2',
+      itemCount: 3,
+      lessonCount: 1,
+    );
+    await courses.setCurrentVersion(courseId: 'course-1', version: 1);
+
+    final third = await courses.installCourse(
+      courseId: 'course-1',
+      title: 'Course',
+      assetId: 'sha256:v3',
+      itemCount: 4,
+      lessonCount: 1,
+    );
+
+    expect(third.version, 3);
+    expect(
+      (await courses.currentVersion('course-1'))?.assetId,
+      'sha256:v3',
+    );
+  });
+
+  test('switching device default preserves learner pinned version', () async {
+    final learnerId = await learners.createProfile(displayName: 'Mia');
+    final v1 = await courses.installCourse(
+      courseId: 'course-1',
+      title: 'Course',
+      assetId: 'sha256:v1',
+      itemCount: 2,
+      lessonCount: 1,
+      sourceJobId: 'job-v1',
+    );
+    final v2 = await courses.installCourse(
+      courseId: 'course-1',
+      title: 'Course',
+      assetId: 'sha256:v2',
+      itemCount: 3,
+      lessonCount: 1,
+      sourceJobId: 'job-v2',
+    );
+    await courses.enrollLearner(
+      learnerId: learnerId,
+      courseId: 'course-1',
+      version: v2.version,
+    );
+
+    final selected = await courses.setCurrentVersion(
+      courseId: 'course-1',
+      version: v1.version,
+    );
+
+    expect(selected.version, 1);
+    final course = await database.select(database.installedCourses).getSingle();
+    expect(course.currentVersion, 1);
+    expect(course.sourceJobId, 'job-v1');
+    final enrollment =
+        await database.select(database.learnerCourseEnrollments).getSingle();
+    expect(enrollment.version, 2);
+
+    final watched = await courses.watchVersions('course-1').first;
+    expect(watched.map((version) => version.version), [2, 1]);
+  });
+
+  test('switching to an unknown version is rejected', () async {
+    await courses.installCourse(
+      courseId: 'course-1',
+      title: 'Course',
+      assetId: 'sha256:v1',
+      itemCount: 2,
+      lessonCount: 1,
+    );
+
+    await expectLater(
+      courses.setCurrentVersion(courseId: 'course-1', version: 99),
+      throwsA(isA<StateError>()),
+    );
+  });
+
   test('enrollment is learner-specific and follows selected course version', () async {
     final learnerId = await learners.createProfile(displayName: 'Mia');
     final installed = await courses.installCourse(
