@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-FLUTTER_VERSION="3.47.3"
+# Keep Vercel on the same Flutter release validated by GitHub Actions.
+FLUTTER_VERSION="3.47.4"
 FLUTTER_HOME="${HOME}/.cache/verbaseed/flutter-${FLUTTER_VERSION}"
 
 if [[ ! -x "${FLUTTER_HOME}/bin/flutter" ]]; then
