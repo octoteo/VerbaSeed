@@ -1,0 +1,25 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub/
+build/
+coverage/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Platform noise
+.DS_Store
+Thumbs.db
+
+# Vercel local state
+.vercel/
+
+# Environment / credentials
+.env
+.env.*
+!.env.example

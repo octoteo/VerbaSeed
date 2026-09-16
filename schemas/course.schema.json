@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://verbaseed.org/schemas/course.schema.json",
+  "title": "VerbaSeed Open Course",
+  "type": "object",
+  "required": ["schemaVersion", "id", "title", "sourceLanguage", "targetLanguage", "version", "units"],
+  "properties": {
+    "schemaVersion": { "const": "0.1" },
+    "id": { "type": "string", "minLength": 3, "pattern": "^[a-z0-9][a-z0-9._-]+$" },
+    "title": { "type": "string", "minLength": 1 },
+    "sourceLanguage": { "type": "string", "minLength": 2 },
+    "targetLanguage": { "type": "string", "minLength": 2 },
+    "version": { "type": "string", "minLength": 1 },
+    "age": {
+      "type": "object",
+      "properties": {
+        "min": { "type": "integer", "minimum": 0 },
+        "max": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "pronunciation": {
+      "type": "object",
+      "properties": {
+        "defaultAccent": { "enum": ["curriculum", "en-GB", "en-US"] },
+        "supportedAccents": {
+          "type": "array",
+          "items": { "enum": ["en-GB", "en-US"] },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["open", "github", "local", "pdf", "camera", "url", "subtitle"] },
+        "uri": { "type": "string" },
+        "license": { "type": "string" },
+        "attribution": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "units": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/unit" }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "unit": {
+      "type": "object",
+      "required": ["id", "title", "lessons"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "lessons": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/lesson" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "lesson": {
+      "type": "object",
+      "required": ["id", "title", "items"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "activities": {
+          "type": "array",
+          "items": { "enum": ["watch", "listen", "repeat", "phonics", "spelling", "dictation", "translation", "reading", "speaking"] },
+          "uniqueItems": true
+        },
+        "items": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/item" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "item": {
+      "type": "object",
+      "required": ["id", "text"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "text": { "type": "string", "minLength": 1 },
+        "translation": { "type": "string" },
+        "ipa": {
+          "type": "object",
+          "properties": {
+            "en-GB": { "type": "string" },
+            "en-US": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "phonics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["grapheme", "phoneme"],
+            "properties": {
+              "grapheme": { "type": "string" },
+              "phoneme": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}
