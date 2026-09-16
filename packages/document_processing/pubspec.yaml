@@ -1,0 +1,10 @@
+name: document_processing
+description: Deterministic document extraction contracts and retry orchestration for VerbaSeed.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: '>=3.12.0 <4.0.0'
+
+dev_dependencies:
+  test: ^1.32.0
