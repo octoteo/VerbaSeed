@@ -22,6 +22,7 @@ jobs:
       matrix:
         package:
           - packages/course_schema
+          - packages/content_source
           - packages/learning_engine
     steps:
       - uses: actions/checkout@v4
@@ -38,9 +39,31 @@ jobs:
         working-directory: ${{ matrix.package }}
         run: dart test
 
+  flutter-local-store:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve local store dependencies
+        working-directory: packages/local_store
+        run: flutter pub get
+      - name: Generate Drift code
+        working-directory: packages/local_store
+        run: dart run build_runner build --delete-conflicting-outputs
+      - name: Analyze local store
+        working-directory: packages/local_store
+        run: flutter analyze --fatal-infos
+      - name: Test local store
+        working-directory: packages/local_store
+        run: flutter test
+
   flutter-web:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -51,6 +74,9 @@ jobs:
 
       - name: Flutter version
         run: flutter --version
+
+      - name: Prepare Drift web runtime
+        run: bash scripts/prepare_local_store.sh
 
       - name: Resolve dependencies
         working-directory: apps/learner

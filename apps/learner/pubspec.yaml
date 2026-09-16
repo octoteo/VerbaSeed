@@ -1,7 +1,7 @@
 name: verbaseed_learner
 description: VerbaSeed learner application.
 publish_to: none
-version: 0.1.0+1
+version: 0.2.0+2
 
 environment:
   sdk: '>=3.12.0 <4.0.0'
@@ -11,15 +11,21 @@ dependencies:
     sdk: flutter
   flutter_riverpod: ^3.4.3
   go_router: ^18.0.1
+  cupertino_icons: ^1.0.8
   course_schema:
     path: ../../packages/course_schema
+  content_source:
+    path: ../../packages/content_source
   learning_engine:
     path: ../../packages/learning_engine
+  local_store:
+    path: ../../packages/local_store
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  drift: 2.35.0
 
 flutter:
   uses-material-design: true

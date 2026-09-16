@@ -9,6 +9,18 @@ final class ReviewState {
 
   final fsrs.Card card;
   final DateTime due;
+
+  Map<String, Object?> toMap() => {
+        'card': card.toMap(),
+        'due': due.toUtc().toIso8601String(),
+      };
+
+  factory ReviewState.fromMap(Map<String, dynamic> source) {
+    final card = fsrs.Card.fromMap(
+      Map<String, dynamic>.from(source['card'] as Map),
+    );
+    return ReviewState(card: card, due: card.due);
+  }
 }
 
 final class ReviewResult {

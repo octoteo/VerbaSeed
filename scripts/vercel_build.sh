@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Keep Vercel on the same Flutter release validated by GitHub Actions.
 FLUTTER_VERSION="3.47.4"
 FLUTTER_HOME="${HOME}/.cache/verbaseed/flutter-${FLUTTER_VERSION}"
 
@@ -13,6 +12,8 @@ fi
 export PATH="${FLUTTER_HOME}/bin:${PATH}"
 flutter --version
 flutter config --enable-web
+
+bash scripts/prepare_local_store.sh
 
 pushd apps/learner >/dev/null
 flutter pub get
