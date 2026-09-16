@@ -155,8 +155,7 @@ final class CourseDraftCompilation {
       .expand((lesson) => lesson.items)
       .length;
 
-  int get lessonCount =>
-      course.units.expand((unit) => unit.lessons).length;
+  int get lessonCount => course.units.expand((unit) => unit.lessons).length;
 
   Map<String, Object?> toMetadata() => {
         'compiledItemCount': itemCount,
@@ -258,11 +257,10 @@ final class CourseDraftCompiler {
       while (index < rawLines.length) {
         final current = rawLines[index];
         final inline = _splitBilingual(current);
-        if (inline != null) {
-          if (_addCandidate(pageCandidates, seen, page.pageNumber, inline)) {
-            index += 1;
-            continue;
-          }
+        if (inline != null &&
+            _addCandidate(pageCandidates, seen, page.pageNumber, inline)) {
+          index += 1;
+          continue;
         }
 
         if (index + 1 < rawLines.length) {
@@ -300,7 +298,8 @@ final class CourseDraftCompiler {
     for (final entry in pageCandidates.entries) {
       final candidates = entry.value;
       for (var offset = 0; offset < candidates.length; offset += maxItemsPerLesson) {
-        final end = (offset + maxItemsPerLesson).clamp(0, candidates.length);
+        final proposedEnd = offset + maxItemsPerLesson;
+        final end = proposedEnd < candidates.length ? proposedEnd : candidates.length;
         final chunk = candidates.sublist(offset, end);
         final section = offset ~/ maxItemsPerLesson + 1;
         final items = <LearningItem>[];
@@ -338,7 +337,6 @@ final class CourseDraftCompiler {
     var requiresReview = false;
     if (totalItems < 3) {
       warnings.add('仅生成 $totalItems 个学习项，建议确认识别范围或 OCR 质量。');
-      requiresReview = true;
     }
     if (confidences.isNotEmpty) {
       final average =
@@ -377,8 +375,10 @@ final class CourseDraftCompiler {
   }
 
   static List<String> _pageLines(ExtractedPage page) {
-    final source = page.blocks.isNotEmpty
-        ? page.blocks.expand((block) => block.text.split(RegExp(r'\r?\n')))
+    final Iterable<String> source = page.blocks.isNotEmpty
+        ? page.blocks.expand(
+            (block) => block.text.split(RegExp(r'\r?\n')),
+          )
         : page.text.split(RegExp(r'\r?\n'));
     final lines = <String>[];
     for (final raw in source) {
@@ -460,7 +460,10 @@ final class CourseDraftCompiler {
     int pageNumber,
     _DraftCandidate candidate,
   ) {
-    final key = candidate.text.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+    final key = candidate.text
+        .toLowerCase()
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
     if (key.isEmpty || !seen.add(key)) return false;
     pages.putIfAbsent(pageNumber, () => <_DraftCandidate>[]).add(candidate);
     return true;
