@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
   "buildCommand": "bash scripts/vercel_build.sh",
   "outputDirectory": "apps/learner/build/web",
   "rewrites": [
