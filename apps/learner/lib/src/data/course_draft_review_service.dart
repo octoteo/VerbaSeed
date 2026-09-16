@@ -34,15 +34,25 @@ final class CourseDraftReview {
 }
 
 final class CourseDraftReviewService {
-  const CourseDraftReviewService({
+  factory CourseDraftReviewService({
     required VerbaSeedDatabase database,
     required ImportRepository repository,
     required ContentAssetStore assetStore,
     DateTime Function()? clock,
-  })  : _database = database,
-        _repository = repository,
-        _assetStore = assetStore,
-        _clock = clock;
+  }) =>
+      CourseDraftReviewService._(
+        database,
+        repository,
+        assetStore,
+        clock,
+      );
+
+  const CourseDraftReviewService._(
+    this._database,
+    this._repository,
+    this._assetStore,
+    this._clock,
+  );
 
   final VerbaSeedDatabase _database;
   final ImportRepository _repository;
