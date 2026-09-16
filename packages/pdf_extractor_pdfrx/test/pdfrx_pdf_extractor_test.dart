@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:document_processing/document_processing.dart';
@@ -33,4 +34,76 @@ void main() {
       ),
     );
   });
+
+  test('extracts text and normalized layout from a real PDF', () async {
+    final document = await extractor.extract(
+      DocumentExtractionRequest(
+        assetId: 'asset-real-pdf',
+        mimeType: 'application/pdf',
+        bytes: _buildSimplePdf(),
+        sourceName: 'fixture.pdf',
+      ),
+    );
+
+    expect(document.providerId, extractor.id);
+    expect(document.pages, hasLength(1));
+    expect(document.plainText, contains('Hello VerbaSeed'));
+    expect(document.pages.single.blocks, isNotEmpty);
+    expect(
+      document.pages.single.blocks.any(
+        (block) => block.text.contains('Hello VerbaSeed'),
+      ),
+      isTrue,
+    );
+    for (final block in document.pages.single.blocks) {
+      final bounds = block.bounds;
+      if (bounds == null) continue;
+      expect(bounds.left, inInclusiveRange(0.0, 1.0));
+      expect(bounds.top, inInclusiveRange(0.0, 1.0));
+      expect(bounds.left + bounds.width, lessThanOrEqualTo(1.0));
+      expect(bounds.top + bounds.height, lessThanOrEqualTo(1.0));
+    }
+  });
+}
+
+Uint8List _buildSimplePdf() {
+  const textStream = 'BT\n/F1 24 Tf\n72 720 Td\n(Hello VerbaSeed) Tj\nET\n';
+  final bytes = <int>[];
+  final offsets = List<int>.filled(6, 0);
+
+  void write(String value) => bytes.addAll(utf8.encode(value));
+
+  void addObject(int number, String body) {
+    offsets[number] = bytes.length;
+    write('$number 0 obj\n$body\nendobj\n');
+  }
+
+  write('%PDF-1.4\n');
+  addObject(1, '<< /Type /Catalog /Pages 2 0 R >>');
+  addObject(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
+  addObject(
+    3,
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] '
+    '/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+  );
+  addObject(4, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  addObject(
+    5,
+    '<< /Length ${utf8.encode(textStream).length} >>\n'
+    'stream\n$textStream'
+    'endstream',
+  );
+
+  final xrefOffset = bytes.length;
+  write('xref\n0 6\n');
+  write('0000000000 65535 f \n');
+  for (var object = 1; object <= 5; object++) {
+    write('${offsets[object].toString().padLeft(10, '0')} 00000 n \n');
+  }
+  write(
+    'trailer\n<< /Size 6 /Root 1 0 R >>\n'
+    'startxref\n$xrefOffset\n%%EOF\n',
+  );
+
+  return Uint8List.fromList(bytes);
 }
