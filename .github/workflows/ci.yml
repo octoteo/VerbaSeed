@@ -107,39 +107,59 @@ jobs:
         working-directory: packages/local_store
         run: flutter test
 
+  flutter-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Drift code
+        working-directory: packages/local_store
+        run: |
+          flutter pub get
+          dart run build_runner build
+      - name: Resolve app dependencies
+        working-directory: apps/learner
+        run: flutter pub get
+      - name: Build release APK
+        working-directory: apps/learner
+        run: flutter build apk --release
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: verbaseed-android-apk
+          path: apps/learner/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
+
   flutter-web:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
-
       - name: Flutter version
         run: flutter --version
-
       - name: Prepare Drift web runtime
         run: bash scripts/prepare_local_store.sh
-
       - name: Resolve dependencies
         working-directory: apps/learner
         run: flutter pub get
-
       - name: Analyze
         working-directory: apps/learner
         run: flutter analyze --fatal-infos
-
       - name: Test
         working-directory: apps/learner
         run: flutter test
-
       - name: Build web
         working-directory: apps/learner
         run: flutter build web --release
-
       - name: Upload web artifact
         uses: actions/upload-artifact@v4
         with:
