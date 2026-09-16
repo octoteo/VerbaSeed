@@ -33,12 +33,11 @@ final class DocumentImportCoordinator {
     this._assetStore,
     this._pdfExtractor, {
     DocumentExtractor? imageExtractor,
-    PdfPageRasterizer? pdfPageRasterizer,
+    this._pdfPageRasterizer,
     required bool imageExtractionAvailable,
     DocumentRetryStateMachine? stateMachine,
     DateTime Function()? clock,
   })  : _imageExtractor = imageExtractor,
-        _pdfPageRasterizer = pdfPageRasterizer,
         imageExtractionAvailable =
             imageExtractionAvailable && imageExtractor != null,
         _stateMachine = stateMachine ?? DocumentRetryStateMachine(),
