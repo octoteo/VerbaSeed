@@ -61,6 +61,42 @@ void main() {
     expect(course.title, 'My revised course');
   });
 
+  test('historical content asset is reused instead of creating a duplicate version', () async {
+    await courses.installCourse(
+      courseId: 'course-1',
+      title: 'Course v1',
+      assetId: 'sha256:v1',
+      itemCount: 2,
+      lessonCount: 1,
+      sourceJobId: 'job-v1',
+    );
+    await courses.installCourse(
+      courseId: 'course-1',
+      title: 'Course v2',
+      assetId: 'sha256:v2',
+      itemCount: 3,
+      lessonCount: 1,
+      sourceJobId: 'job-v2',
+    );
+    await courses.setCurrentVersion(courseId: 'course-1', version: 1);
+
+    final reused = await courses.installCourse(
+      courseId: 'course-1',
+      title: 'Course v2',
+      assetId: 'sha256:v2',
+      itemCount: 3,
+      lessonCount: 1,
+      sourceJobId: 'job-v2-new-check',
+    );
+
+    expect(reused.reused, isTrue);
+    expect(reused.version, 2);
+    expect(await database.select(database.installedCourseVersions).get(), hasLength(2));
+    final course = await database.select(database.installedCourses).getSingle();
+    expect(course.currentVersion, 2);
+    expect(course.sourceJobId, 'job-v2-new-check');
+  });
+
   test('new versions stay monotonic after rolling the default backward', () async {
     await courses.installCourse(
       courseId: 'course-1',
