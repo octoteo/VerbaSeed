@@ -88,6 +88,64 @@ void main() {
     expect(decoded.plainText, contains('page 2'));
   });
 
+  test('image OCR uses the same durable extraction transaction', () async {
+    final now = DateTime.utc(2026, 9, 16, 7);
+    final rawAsset = await assetStore.put(
+      bytes: Uint8List.fromList([1, 2, 3, 4]),
+      fileName: 'page.png',
+      mimeType: 'image/png',
+    );
+    final jobId = await repository.enqueue(
+      ContentSource(
+        type: ContentSourceType.image,
+        displayName: rawAsset.fileName,
+        metadata: {'asset': rawAsset.toJson()},
+      ),
+    );
+    final job = await (database.select(database.importJobs)
+          ..where((table) => table.id.equals(jobId)))
+        .getSingle();
+    final imageExtractor = _FakeImageExtractor(now: now);
+    final coordinator = DocumentImportCoordinator(
+      repository: repository,
+      assetStore: assetStore,
+      pdfExtractor: _FakePdfExtractor(now: now),
+      imageExtractor: imageExtractor,
+      imageExtractionAvailable: true,
+      clock: () => now,
+    );
+
+    final state = await coordinator.processImage(job);
+
+    expect(state.phase, DocumentProcessingPhase.succeeded);
+    expect(imageExtractor.calls, 1);
+    final persisted = await (database.select(database.importJobs)
+          ..where((table) => table.id.equals(jobId)))
+        .getSingle();
+    expect(persisted.status, ImportJobState.ready.name);
+    final persistedSource = repository.decodeSource(persisted);
+    expect(persistedSource.metadata['ocrEmpty'], isFalse);
+    expect(persistedSource.metadata['requiresReview'], isFalse);
+    expect(persistedSource.metadata['extractionProvider'], 'fake-image-ocr');
+
+    final extractionAsset = ContentAsset.fromJson(
+      Map<String, Object?>.from(
+        persistedSource.metadata[
+              DocumentImportCoordinator.extractionAssetMetadataKey
+            ]!
+            as Map,
+      ),
+    );
+    final resultBytes = await assetStore.read(extractionAsset.id);
+    expect(resultBytes, isNotNull);
+    final decoded = ExtractedDocument.fromJson(
+      Map<String, Object?>.from(
+        jsonDecode(utf8.decode(resultBytes!)) as Map,
+      ),
+    );
+    expect(decoded.plainText, 'Hello from OCR');
+  });
+
   test('retryable extraction failures persist bounded retry state', () async {
     final now = DateTime.utc(2026, 9, 16, 6);
     final rawAsset = await assetStore.put(
@@ -149,6 +207,37 @@ final class _FakePdfExtractor implements DocumentExtractor {
       pages: [
         for (var page = range.startPage; page <= range.endPage; page++)
           ExtractedPage(pageNumber: page, text: 'page $page'),
+      ],
+    );
+  }
+}
+
+final class _FakeImageExtractor implements DocumentExtractor {
+  _FakeImageExtractor({required this.now});
+
+  final DateTime now;
+  int calls = 0;
+
+  @override
+  String get id => 'fake-image-ocr';
+
+  @override
+  bool supportsMimeType(String mimeType) => mimeType.startsWith('image/');
+
+  @override
+  Future<ExtractedDocument> extract(DocumentExtractionRequest request) async {
+    calls += 1;
+    return ExtractedDocument(
+      assetId: request.assetId,
+      mimeType: request.mimeType,
+      providerId: id,
+      extractedAt: now,
+      pages: [
+        ExtractedPage(
+          pageNumber: 1,
+          text: 'Hello from OCR',
+          blocks: [DocumentTextBlock(text: 'Hello from OCR')],
+        ),
       ],
     );
   }

@@ -2,6 +2,7 @@ import 'package:content_source/content_source.dart';
 import 'package:content_store/content_store.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_store/local_store.dart';
+import 'package:ocr_google_mlkit/ocr_google_mlkit.dart';
 import 'package:pdf_extractor_pdfrx/pdf_extractor_pdfrx.dart';
 
 import 'document_import_coordinator.dart';
@@ -32,6 +33,10 @@ final pdfExtractorProvider = Provider<PdfrxPdfExtractor>(
   (ref) => const PdfrxPdfExtractor(),
 );
 
+final imageOcrExtractorProvider = Provider<GoogleMlKitTextExtractor>(
+  (ref) => const GoogleMlKitTextExtractor(),
+);
+
 final learnerRepositoryProvider = Provider<LearnerRepository>(
   (ref) => LearnerRepository(ref.watch(databaseProvider)),
 );
@@ -49,6 +54,8 @@ final documentImportCoordinatorProvider = Provider<DocumentImportCoordinator>(
     repository: ref.watch(importRepositoryProvider),
     assetStore: ref.watch(contentAssetStoreProvider),
     pdfExtractor: ref.watch(pdfExtractorProvider),
+    imageExtractor: ref.watch(imageOcrExtractorProvider),
+    imageExtractionAvailable: GoogleMlKitTextExtractor.isSupportedPlatform,
   ),
 );
 

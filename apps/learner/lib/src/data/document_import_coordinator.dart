@@ -11,6 +11,8 @@ final class DocumentImportCoordinator {
     required ImportRepository repository,
     required ContentAssetStore assetStore,
     required DocumentExtractor pdfExtractor,
+    DocumentExtractor? imageExtractor,
+    bool imageExtractionAvailable = false,
     DocumentRetryStateMachine? stateMachine,
     DateTime Function()? clock,
   }) =>
@@ -18,6 +20,8 @@ final class DocumentImportCoordinator {
         repository,
         assetStore,
         pdfExtractor,
+        imageExtractor: imageExtractor,
+        imageExtractionAvailable: imageExtractionAvailable,
         stateMachine: stateMachine,
         clock: clock,
       );
@@ -26,9 +30,14 @@ final class DocumentImportCoordinator {
     this._repository,
     this._assetStore,
     this._pdfExtractor, {
+    DocumentExtractor? imageExtractor,
+    required bool imageExtractionAvailable,
     DocumentRetryStateMachine? stateMachine,
     DateTime Function()? clock,
-  })  : _stateMachine = stateMachine ?? DocumentRetryStateMachine(),
+  })  : _imageExtractor = imageExtractor,
+        imageExtractionAvailable =
+            imageExtractionAvailable && imageExtractor != null,
+        _stateMachine = stateMachine ?? DocumentRetryStateMachine(),
         _clock = clock ?? DateTime.now;
 
   static const extractionAssetMetadataKey = 'extractionAsset';
@@ -36,6 +45,8 @@ final class DocumentImportCoordinator {
   final ImportRepository _repository;
   final ContentAssetStore _assetStore;
   final DocumentExtractor _pdfExtractor;
+  final DocumentExtractor? _imageExtractor;
+  final bool imageExtractionAvailable;
   final DocumentRetryStateMachine _stateMachine;
   final DateTime Function() _clock;
   final Set<String> _inFlight = <String>{};
@@ -45,34 +56,72 @@ final class DocumentImportCoordinator {
     PageRange? pageRange,
     bool replacePageRange = false,
   }) async {
+    var source = _repository.decodeSource(job);
+    if (source.type != ContentSourceType.pdf) {
+      throw StateError('仅 PDF 导入任务可以使用 PDF 解析器');
+    }
+
+    if (replacePageRange) {
+      final metadata = <String, Object?>{...source.metadata};
+      if (pageRange == null) {
+        metadata.remove('pageRange');
+      } else {
+        metadata['pageRange'] = pageRange.toJson();
+      }
+      source = source.copyWith(metadata: metadata);
+    }
+
+    return _processDocument(
+      job: job,
+      source: source,
+      extractor: _pdfExtractor,
+      pageRange: _pageRangeFromMetadata(source.metadata),
+      emptyTextMetadataKey: 'requiresOcr',
+    );
+  }
+
+  Future<DocumentProcessingState> processImage(ImportJob job) {
+    final source = _repository.decodeSource(job);
+    if (source.type != ContentSourceType.image &&
+        source.type != ContentSourceType.cameraImage) {
+      throw StateError('仅图片或拍照导入任务可以使用 OCR 解析器');
+    }
+    final extractor = _imageExtractor;
+    if (!imageExtractionAvailable || extractor == null) {
+      throw UnsupportedError('当前平台没有可用的本地图片 OCR 运行时');
+    }
+    return _processDocument(
+      job: job,
+      source: source,
+      extractor: extractor,
+      emptyTextMetadataKey: 'ocrEmpty',
+    );
+  }
+
+  Future<DocumentProcessingState> _processDocument({
+    required ImportJob job,
+    required ContentSource source,
+    required DocumentExtractor extractor,
+    PageRange? pageRange,
+    required String emptyTextMetadataKey,
+  }) async {
     if (!_inFlight.add(job.id)) {
       throw StateError('文档解析任务正在执行: ${job.id}');
     }
     try {
-      var source = _repository.decodeSource(job);
-      if (source.type != ContentSourceType.pdf) {
-        throw StateError('仅 PDF 导入任务可以使用 PDF 解析器');
-      }
-
-      if (replacePageRange) {
-        final metadata = <String, Object?>{...source.metadata};
-        if (pageRange == null) {
-          metadata.remove('pageRange');
-        } else {
-          metadata['pageRange'] = pageRange.toJson();
-        }
-        source = source.copyWith(metadata: metadata);
-      }
-
-      var state = documentProcessingStateFromMetadata(source.metadata) ??
+      var resolvedSource = source;
+      var state = documentProcessingStateFromMetadata(resolvedSource.metadata) ??
           _stateMachine.initial(at: _now());
       final recovered = _stateMachine.recoverInterrupted(state, at: _now());
       if (!_sameState(recovered, state)) {
         state = recovered;
-        source = source.copyWith(
-          metadata: withDocumentProcessingState(source.metadata, state),
+        resolvedSource = resolvedSource.copyWith(
+          metadata: withDocumentProcessingState(
+            resolvedSource.metadata,
+            state,
+          ),
         );
-        await _persistState(job.id, source, state);
+        await _persistState(job.id, resolvedSource, state);
       }
 
       final startAt = _now();
@@ -83,33 +132,50 @@ final class DocumentImportCoordinator {
       state = _stateMachine.begin(
         state,
         at: startAt,
-        providerId: _pdfExtractor.id,
+        providerId: extractor.id,
       );
-      source = source.copyWith(
-        metadata: withDocumentProcessingState(source.metadata, state),
+      resolvedSource = resolvedSource.copyWith(
+        metadata: withDocumentProcessingState(
+          resolvedSource.metadata,
+          state,
+        ),
       );
-      await _persistState(job.id, source, state);
+      await _persistState(job.id, resolvedSource, state);
 
       try {
-        final asset = _decodeSourceAsset(source.metadata);
+        final asset = _decodeSourceAsset(resolvedSource.metadata);
         final bytes = await _assetStore.read(asset.id);
         if (bytes == null) {
           throw const DocumentExtractionException(
             code: 'content_asset_missing',
-            message: '原始 PDF 文件已不存在，无法继续解析',
+            message: '原始文件已不存在，无法继续解析',
+            retryable: false,
+          );
+        }
+        if (!extractor.supportsMimeType(asset.mimeType)) {
+          throw DocumentExtractionException(
+            code: 'unsupported_mime_type',
+            message: '解析器 ${extractor.id} 不支持 ${asset.mimeType}',
             retryable: false,
           );
         }
 
-        final document = await _pdfExtractor.extract(
+        final document = await extractor.extract(
           DocumentExtractionRequest(
             assetId: asset.id,
             mimeType: asset.mimeType,
             bytes: bytes,
             sourceName: asset.fileName,
-            pageRange: _pageRangeFromMetadata(source.metadata),
+            pageRange: pageRange,
           ),
         );
+        if (document.assetId != asset.id) {
+          throw const DocumentExtractionException(
+            code: 'asset_identity_mismatch',
+            message: '解析结果与原始资产标识不一致',
+            retryable: false,
+          );
+        }
 
         final resultBytes = Uint8List.fromList(
           utf8.encode(jsonEncode(document.toJson())),
@@ -121,29 +187,29 @@ final class DocumentImportCoordinator {
         );
 
         final completed = _stateMachine.succeed(state, at: _now());
-        final resolvedMetadata = <String, Object?>{
-          ...source.metadata,
+        final emptyText = document.plainText.trim().isEmpty;
+        final metadata = <String, Object?>{
+          ...resolvedSource.metadata,
           extractionAssetMetadataKey: resultAsset.toJson(),
+          'extractionProvider': extractor.id,
           'extractedPageCount': document.pages.length,
           'extractedTextLength': document.plainText.length,
-          'requiresOcr': document.plainText.trim().isEmpty,
+          emptyTextMetadataKey: emptyText,
+          if (emptyTextMetadataKey == 'ocrEmpty') 'requiresReview': emptyText,
         };
-        source = source.copyWith(
-          metadata: withDocumentProcessingState(
-            resolvedMetadata,
-            completed,
-          ),
+        resolvedSource = resolvedSource.copyWith(
+          metadata: withDocumentProcessingState(metadata, completed),
         );
         await _repository.replaceSource(
           job.id,
-          source,
+          resolvedSource,
           state: ImportJobState.ready,
         );
         return completed;
       } on DocumentExtractionException catch (error) {
         return await _persistFailure(
           jobId: job.id,
-          source: source,
+          source: resolvedSource,
           running: state,
           code: error.code,
           message: error.message,
@@ -152,7 +218,7 @@ final class DocumentImportCoordinator {
       } on FormatException catch (error) {
         return await _persistFailure(
           jobId: job.id,
-          source: source,
+          source: resolvedSource,
           running: state,
           code: 'invalid_import_metadata',
           message: error.message,
@@ -161,7 +227,7 @@ final class DocumentImportCoordinator {
       } on StateError catch (error) {
         return await _persistFailure(
           jobId: job.id,
-          source: source,
+          source: resolvedSource,
           running: state,
           code: 'content_asset_invalid',
           message: '$error',
@@ -170,7 +236,7 @@ final class DocumentImportCoordinator {
       } on Object catch (error) {
         return await _persistFailure(
           jobId: job.id,
-          source: source,
+          source: resolvedSource,
           running: state,
           code: 'document_pipeline_failure',
           message: '$error',
