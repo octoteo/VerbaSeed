@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
 import 'features/curriculum/curriculum_page.dart';
 import 'features/explore/explore_page.dart';
 import 'features/home/home_page.dart';
 import 'features/import/import_page.dart';
+import 'features/practice/sentence_typing_page.dart';
 import 'features/settings/settings_page.dart';
 import 'shell/app_shell.dart';
 
@@ -52,6 +54,10 @@ GoRouter createRouter() => GoRouter(
               ],
             ),
           ],
+        ),
+        GoRoute(
+          path: '/practice/typing',
+          builder: (context, state) => const SentenceTypingPage(),
         ),
       ],
       errorBuilder: (context, state) => Scaffold(
