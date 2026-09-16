@@ -78,6 +78,7 @@ final courseInstallationServiceProvider = Provider<CourseInstallationService>(
     reviewService: ref.watch(courseDraftReviewServiceProvider),
     installationRepository: ref.watch(courseInstallationRepositoryProvider),
     reviewRepository: ref.watch(reviewRepositoryProvider),
+    assetStore: ref.watch(contentAssetStoreProvider),
   ),
 );
 
