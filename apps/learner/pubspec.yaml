@@ -1,7 +1,7 @@
 name: verbaseed_learner
 description: VerbaSeed learner application.
 publish_to: none
-version: 0.2.4+6
+version: 0.2.5+7
 
 environment:
   sdk: '>=3.13.0 <4.0.0'
@@ -23,6 +23,8 @@ dependencies:
     path: ../../packages/content_store
   document_processing:
     path: ../../packages/document_processing
+  ocr_google_mlkit:
+    path: ../../packages/ocr_google_mlkit
   pdf_extractor_pdfrx:
     path: ../../packages/pdf_extractor_pdfrx
   learning_engine:
