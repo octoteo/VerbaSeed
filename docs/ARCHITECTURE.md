@@ -42,6 +42,8 @@ Infrastructure adapters
 
 `ocr_google_mlkit` implements the same `DocumentExtractor` contract for JPEG, PNG and WebP assets. On supported mobile runtimes it uses Google ML Kit text recognition on-device with the Latin model used by VerbaSeed's English-learning path, converts block geometry to normalized document coordinates, and deletes temporary recognition files after each run. The Web build receives a conditional stub that fails explicitly as unsupported; it does not upload learner images to a remote OCR service. Empty OCR output is a successful extraction with review metadata, not a retry loop.
 
+The import experience observes the durable import queue rather than owning an in-memory OCR task. Fresh image/camera jobs are eligible for automatic OCR only after their original content-addressed asset and queued processing metadata have been committed. Automatic OCR runs are drained serially to bound mobile memory and native recognizer pressure. If work is interrupted or a provider asks for a retry, the UI exposes recovery actions backed by the persisted `DocumentProcessingState`; reopening the app never depends on reconstructing an ephemeral Future. Unsupported platforms show the capability as unavailable while leaving the imported asset intact.
+
 ## Platform hosts and release gates
 
 The Web host is deployed as a static Flutter application. Android has a checked-in Flutter host project with stable package/namespace `io.github.octoteo.verbaseed`, Java/Kotlin 17 settings and an explicit camera capability. Platform-specific document adapters stay behind the same domain contracts, so Android OCR does not change Web domain behavior.
