@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:crypto/crypto.dart';
+import 'package:crypto/crypto.dart' as crypto;
 
 final class ContentAsset {
   const ContentAsset({
@@ -25,7 +25,7 @@ final class ContentAsset {
     required String mimeType,
     DateTime? createdAt,
   }) {
-    final digest = sha256.convert(bytes).toString();
+    final digest = crypto.sha256.convert(bytes).toString();
     return ContentAsset(
       id: digest,
       fileName: _sanitizeDisplayName(fileName),
