@@ -6,8 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_store/local_store.dart';
-import 'package:verbaseed_learner/src/app.dart';
 import 'package:verbaseed_learner/src/data/providers.dart';
+import 'package:verbaseed_learner/src/features/import/ocr_import_page.dart';
 
 void main() {
   testWidgets('image queue exposes explicit OCR platform availability', (tester) async {
@@ -20,7 +20,7 @@ void main() {
     final processingState = DocumentRetryStateMachine().initial(
       at: DateTime.utc(2026, 9, 16),
     );
-    await repository.enqueue(
+    final jobId = await repository.enqueue(
       ContentSource(
         type: ContentSourceType.image,
         displayName: 'lesson-page.png',
@@ -32,19 +32,22 @@ void main() {
         ),
       ),
     );
+    final job = await (database.select(database.importJobs)
+          ..where((table) => table.id.equals(jobId)))
+        .getSingle();
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          databaseProvider.overrideWith((ref) => database),
+          importRepositoryProvider.overrideWith((ref) => repository),
+          importJobsProvider.overrideWith((ref) => Stream.value([job])),
           contentAssetStoreProvider.overrideWith((ref) => assetStore),
         ],
-        child: const VerbaSeedApp(),
+        child: const MaterialApp(
+          home: Scaffold(body: OcrImportPage()),
+        ),
       ),
     );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('导入').last);
     await tester.pumpAndSettle();
 
     expect(find.text('创建与导入'), findsOneWidget);
@@ -56,12 +59,5 @@ void main() {
 
     expect(find.text('lesson-page.png'), findsWidgets);
     expect(find.text('等待 OCR'), findsOneWidget);
-
-    // Disposing a Drift query stream schedules a zero-duration close timer.
-    // Unmount the ProviderScope explicitly and advance the fake clock once so
-    // the test binding does not mistake normal asynchronous disposal for a
-    // leaked timer.
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
   });
 }
