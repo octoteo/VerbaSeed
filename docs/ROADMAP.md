@@ -11,22 +11,28 @@
 
 ## v0.2 — local-first learner state (in progress)
 
+Completed foundation:
+
 - Drift/SQLite local source of truth across native and web
 - Multiple learner profiles with atomic active-profile switching
 - Serializable and persisted FSRS card state plus append-only review events
 - Local import-job queue
 - Content Source Protocol primitives for camera, PDF, GitHub, web, subtitles and pasted text
-- GitHub source validation and raw manifest resolution
-- Plain-text Course Compiler draft path
 - Drift Web worker + sqlite3 WASM build pipeline
+- Content-addressed asset store with SHA-256 integrity checks
+- Native filesystem asset backend and Web IndexedDB asset backend
+- Camera capture plus image/PDF file selection
+- GitHub course manifest fetch pinned to resolved commit SHA
+- Plain-text Course Compiler draft path
 
 Next v0.2 increments:
 
-- Durable large-file content store for PDF/image bytes
-- Camera and file picker adapters
-- OCR/layout extraction boundary and deterministic import retries
-- GitHub course manifest fetch, validation, version pinning and update checks
-- Backup/export/import of learner data
+- OCR/layout extraction provider and deterministic retry state machine
+- PDF text/layout extraction and page-range handling
+- Course installation tables separate from raw import jobs
+- GitHub update checks with user-controlled upgrades and rollback
+- Backup/export/import of learner data and course manifests
+- Android project scaffold and release build gate
 
 ## v0.3 — early learning content
 
