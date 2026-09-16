@@ -18,10 +18,11 @@ class CurriculumPage extends ConsumerWidget {
     final enrollmentState = activeLearner == null
         ? null
         : ref.watch(learnerCourseEnrollmentsProvider(activeLearner.id));
-    final enrolledCourseIds = enrollmentState?.asData?.value
-            .map((enrollment) => enrollment.courseId)
-            .toSet() ??
-        const <String>{};
+    final enrollmentsByCourse = {
+      for (final enrollment in enrollmentState?.asData?.value ??
+          const <LearnerCourseEnrollment>[])
+        enrollment.courseId: enrollment,
+    };
     final installedSourceJobIds = courses.asData?.value
             .map((course) => course.sourceJobId)
             .whereType<String>()
@@ -129,7 +130,7 @@ class CurriculumPage extends ConsumerWidget {
                   _InstalledCourseCard(
                     course: items[index],
                     activeLearner: activeLearner,
-                    enrolled: enrolledCourseIds.contains(items[index].id),
+                    enrollment: enrollmentsByCourse[items[index].id],
                     enrollmentLoading:
                         activeLearner != null && enrollmentState?.isLoading == true,
                     onEnroll: activeLearner == null
@@ -370,24 +371,28 @@ class _EmptyCourseLibrary extends StatelessWidget {
   }
 }
 
-class _InstalledCourseCard extends StatelessWidget {
+class _InstalledCourseCard extends ConsumerWidget {
   const _InstalledCourseCard({
     required this.course,
     required this.activeLearner,
-    required this.enrolled,
+    required this.enrollment,
     required this.enrollmentLoading,
     required this.onEnroll,
   });
 
   final InstalledCourse course;
   final LearnerProfile? activeLearner;
-  final bool enrolled;
+  final LearnerCourseEnrollment? enrollment;
   final bool enrollmentLoading;
   final Future<void> Function()? onEnroll;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final learner = activeLearner;
+    final versionsState = ref.watch(installedCourseVersionsProvider(course.id));
+    final versions = versionsState.asData?.value ?? const <InstalledCourseVersion>[];
+    final pinnedVersion = enrollment?.version;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -405,20 +410,25 @@ class _InstalledCourseCard extends StatelessWidget {
                 children: [
                   Text(course.title, style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 4),
-                  Text('本地版本 v${course.currentVersion} · 内容资产独立于导入任务保存'),
+                  Text(
+                    '设备默认 v${course.currentVersion} · '
+                    '历史版本内容以不可变资产保存',
+                  ),
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Chip(label: Text('v${course.currentVersion}')),
+                      Chip(label: Text('默认 v${course.currentVersion}')),
                       if (learner == null)
                         const Chip(label: Text('设备已安装'))
-                      else if (enrolled)
+                      else if (enrollment != null)
                         Chip(
                           avatar: const Icon(Icons.check, size: 18),
-                          label: Text('已加入 ${learner.displayName}'),
+                          label: Text(
+                            '已加入 ${learner.displayName} · v$pinnedVersion',
+                          ),
                         )
                       else if (enrollmentLoading)
                         const Chip(label: Text('读取学习计划…'))
@@ -430,6 +440,63 @@ class _InstalledCourseCard extends StatelessWidget {
                         ),
                     ],
                   ),
+                  const SizedBox(height: 14),
+                  Text('设备默认版本', style: Theme.of(context).textTheme.labelLarge),
+                  const SizedBox(height: 6),
+                  if (versionsState.isLoading)
+                    const LinearProgressIndicator()
+                  else if (versionsState.hasError)
+                    Text('版本历史读取失败：${versionsState.error}')
+                  else
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final version in versions)
+                          ChoiceChip(
+                            label: Text(
+                              'v${version.version} · ${version.lessonCount} 课节 · '
+                              '${version.itemCount} 项',
+                            ),
+                            selected: version.version == course.currentVersion,
+                            onSelected: version.version == course.currentVersion
+                                ? null
+                                : (selected) async {
+                                    if (!selected) return;
+                                    try {
+                                      await ref
+                                          .read(courseInstallationRepositoryProvider)
+                                          .setCurrentVersion(
+                                            courseId: course.id,
+                                            version: version.version,
+                                          );
+                                      if (!context.mounted) return;
+                                      final learnerMessage = enrollment == null
+                                          ? ''
+                                          : '；${learner?.displayName ?? '当前学习者'}仍保持 v$pinnedVersion';
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            '设备默认版本已切换到 v${version.version}$learnerMessage',
+                                          ),
+                                        ),
+                                      );
+                                    } on Object catch (error) {
+                                      if (!context.mounted) return;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('切换课程版本失败：$error')),
+                                      );
+                                    }
+                                  },
+                          ),
+                      ],
+                    ),
+                  if (versions.length > 1) ...[
+                    const SizedBox(height: 8),
+                    const Text(
+                      '切换只改变设备默认版本；已经开始学习的档案保持其当前版本，避免静默改变复习计划。',
+                    ),
+                  ],
                 ],
               ),
             ),
