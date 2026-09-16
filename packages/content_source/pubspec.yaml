@@ -1,7 +1,7 @@
 name: content_source
 description: Content source contracts and course draft compiler for VerbaSeed.
 publish_to: none
-version: 0.2.1
+version: 0.3.0
 
 environment:
   sdk: '>=3.12.0 <4.0.0'
@@ -9,6 +9,8 @@ environment:
 dependencies:
   course_schema:
     path: ../course_schema
+  document_processing:
+    path: ../document_processing
   http: ^1.6.0
 
 dev_dependencies:
