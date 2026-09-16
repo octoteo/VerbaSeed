@@ -47,7 +47,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('创建与导入'), findsOneWidget);
-    expect(find.text('当前平台不提供本地图片 OCR'), findsOneWidget);
+    final capability = find.text('当前平台不提供本地图片 OCR');
+    expect(capability, findsOneWidget);
+
+    await tester.tap(capability);
+    await tester.pumpAndSettle();
+
     expect(find.text('lesson-page.png'), findsWidgets);
+    expect(find.text('等待 OCR'), findsOneWidget);
   });
 }
