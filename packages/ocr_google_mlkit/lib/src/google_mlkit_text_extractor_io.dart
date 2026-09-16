@@ -11,7 +11,9 @@ import 'layout_normalizer.dart';
 final class GoogleMlKitTextExtractor implements DocumentExtractor {
   const GoogleMlKitTextExtractor();
 
-  static bool get isSupportedPlatform => Platform.isAndroid || Platform.isIOS;
+  // V1 ships the Chinese language package in the Android host. iOS remains an
+  // explicit future target until its Podfile also pins TextRecognitionChinese.
+  static bool get isSupportedPlatform => Platform.isAndroid;
 
   @override
   String get id => 'google-mlkit-text-zh-latin';
@@ -24,7 +26,7 @@ final class GoogleMlKitTextExtractor implements DocumentExtractor {
     if (!isSupportedPlatform) {
       throw const DocumentExtractionException(
         code: 'ocr_unsupported_platform',
-        message: 'Google ML Kit OCR 当前仅支持 Android/iOS 原生运行时',
+        message: '当前 VerbaSeed 构建仅在 Android 配置本地中英 OCR；不会自动切换到云端服务',
         retryable: false,
       );
     }
