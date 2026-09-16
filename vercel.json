@@ -1,9 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "ignoreCommand": "bash scripts/vercel_ignore_build.sh",
-  "buildCommand": "bash scripts/vercel_build.sh",
-  "outputDirectory": "apps/learner/build/web",
+  "git": {
+    "deploymentEnabled": false
+  },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ],

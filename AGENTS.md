@@ -42,3 +42,5 @@ Use small PRs with clear acceptance criteria. Keep public schemas and architectu
 Vercel is a release gate, not the inner development loop. Keep docs-only changes skippable, avoid duplicate full Flutter builds for superseded commits, and batch coherent edits before pushing. When deployments queue, validate the newest commit SHA rather than waiting on stale previews. Merge only after the latest commit's required CI and relevant deployment checks pass.
 
 Web releases are build-once/promote-unchanged: GitHub Actions creates and tests `.vercel/output`; the deployment stage must upload that exact artifact and must not rerun Flutter, Drift codegen, analysis, or tests.
+
+Vercel Git auto-deployments stay disabled. Preview and production releases must originate from the GitHub Actions quality gate and use `vercel deploy --prebuilt` on the tested artifact.
