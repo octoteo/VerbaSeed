@@ -4,8 +4,10 @@ import 'package:content_source/content_source.dart';
 import 'package:document_processing/document_processing.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:local_store/local_store.dart';
 
+import '../../data/document_import_coordinator.dart';
 import '../../data/providers.dart';
 import 'import_page.dart';
 
@@ -46,6 +48,7 @@ class _OcrImportPageState extends ConsumerState<OcrImportPage> {
             repository: repository,
             available: coordinator.imageExtractionAvailable,
             onProcess: _processImageManually,
+            onReview: (job) => context.push('/import/draft/${job.id}'),
           ),
           loading: () => const SizedBox.shrink(),
           error: (_, _) => const SizedBox.shrink(),
@@ -136,12 +139,14 @@ class _OcrQueuePanel extends StatelessWidget {
     required this.repository,
     required this.available,
     required this.onProcess,
+    required this.onReview,
   });
 
   final List<ImportJob> jobs;
   final ImportRepository repository;
   final bool available;
   final Future<void> Function(ImportJob job) onProcess;
+  final void Function(ImportJob job) onReview;
 
   @override
   Widget build(BuildContext context) {
@@ -161,6 +166,9 @@ class _OcrQueuePanel extends StatelessWidget {
     final reviewCount = imageJobs.where(
       (item) => item.source.metadata['requiresReview'] == true,
     ).length;
+    final draftCount = imageJobs.where(
+      (item) => _hasCourseDraft(item.source),
+    ).length;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
@@ -174,6 +182,7 @@ class _OcrQueuePanel extends StatelessWidget {
             available
                 ? '新拍摄/导入图片会在原图落盘后自动识别；$pendingCount 个可恢复任务'
                     '${reviewCount == 0 ? '' : ' · $reviewCount 个结果需人工检查'}'
+                    '${draftCount == 0 ? '' : ' · $draftCount 个课程草稿'}'
                 : '图片仍会安全保存；请在 Android/iOS 设备上执行离线识别。',
           ),
           children: [
@@ -183,6 +192,7 @@ class _OcrQueuePanel extends StatelessWidget {
                 source: item.source,
                 available: available,
                 onProcess: onProcess,
+                onReview: onReview,
               ),
             if (imageJobs.length > 6)
               Padding(
@@ -205,12 +215,14 @@ class _OcrJobTile extends StatelessWidget {
     required this.source,
     required this.available,
     required this.onProcess,
+    required this.onReview,
   });
 
   final ImportJob job;
   final ContentSource source;
   final bool available;
   final Future<void> Function(ImportJob job) onProcess;
+  final void Function(ImportJob job) onReview;
 
   @override
   Widget build(BuildContext context) {
@@ -218,19 +230,46 @@ class _OcrJobTile extends StatelessWidget {
     final actionAvailable = available && (state == null || !state.isTerminal);
     final empty = source.metadata['ocrEmpty'] == true;
     final needsReview = source.metadata['requiresReview'] == true;
+    final hasDraft = _hasCourseDraft(source);
+    final draftStatus = source.metadata['courseDraftStatus'] as String?;
+    final compiledItemCount = source.metadata['compiledItemCount'];
 
     return ListTile(
       dense: true,
       leading: Icon(_stateIcon(state, empty: empty)),
       title: Text(job.displayName, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(_stateLabel(state, empty: empty, needsReview: needsReview)),
-      trailing: actionAvailable
-          ? IconButton(
-              tooltip: _actionTooltip(state),
-              onPressed: () => onProcess(job),
-              icon: Icon(_actionIcon(state)),
-            )
-          : null,
+      subtitle: Text(
+        _stateLabel(
+          state,
+          empty: empty,
+          needsReview: needsReview,
+          draftStatus: draftStatus,
+          compiledItemCount: compiledItemCount,
+        ),
+      ),
+      trailing: !hasDraft && !actionAvailable
+          ? null
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (hasDraft)
+                  IconButton(
+                    tooltip: draftStatus == 'accepted' ? '查看已接受课程草稿' : '复核课程草稿',
+                    onPressed: () => onReview(job),
+                    icon: Icon(
+                      draftStatus == 'accepted'
+                          ? Icons.verified_outlined
+                          : Icons.edit_note_outlined,
+                    ),
+                  ),
+                if (actionAvailable)
+                  IconButton(
+                    tooltip: _actionTooltip(state),
+                    onPressed: () => onProcess(job),
+                    icon: Icon(_actionIcon(state)),
+                  ),
+              ],
+            ),
     );
   }
 
@@ -238,19 +277,28 @@ class _OcrJobTile extends StatelessWidget {
     DocumentProcessingState? state, {
     required bool empty,
     required bool needsReview,
+    required String? draftStatus,
+    required Object? compiledItemCount,
   }) {
-    if (state == null) return '等待 OCR';
-    return switch (state.phase) {
+    final draftSuffix = switch (draftStatus) {
+      'accepted' => ' · 课程草稿已接受',
+      'ready' => ' · 已生成${compiledItemCount == null ? '' : ' $compiledItemCount 项'}课程草稿',
+      'needsReview' => ' · 课程草稿需检查',
+      _ => '',
+    };
+    if (state == null) return '等待 OCR$draftSuffix';
+    final base = switch (state.phase) {
       DocumentProcessingPhase.queued => '等待 OCR',
       DocumentProcessingPhase.extracting => '正在离线识别',
       DocumentProcessingPhase.retryScheduled =>
         '等待恢复 · 已尝试 ${state.attempt}/${state.maxAttempts}',
-      DocumentProcessingPhase.succeeded when empty || needsReview => '识别完成，但未检测到文本，需要人工检查',
+      DocumentProcessingPhase.succeeded when empty || needsReview => '识别完成，需要人工检查',
       DocumentProcessingPhase.succeeded => '识别完成',
       DocumentProcessingPhase.failed =>
         '失败：${state.lastErrorMessage ?? state.lastErrorCode ?? '未知错误'}',
       DocumentProcessingPhase.cancelled => '已取消',
     };
+    return '$base$draftSuffix';
   }
 
   static IconData _stateIcon(DocumentProcessingState? state, {required bool empty}) {
@@ -292,6 +340,10 @@ ContentSource? _decodeSource(ImportRepository repository, ImportJob job) {
 bool _isImageSource(ContentSource source) =>
     source.type == ContentSourceType.image ||
     source.type == ContentSourceType.cameraImage;
+
+bool _hasCourseDraft(ContentSource source) =>
+    source.metadata[DocumentImportCoordinator.courseDraftAssetMetadataKey]
+        is Map;
 
 DocumentProcessingState? _processingState(ContentSource source) {
   try {
