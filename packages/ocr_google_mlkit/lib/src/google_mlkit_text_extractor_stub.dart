@@ -6,7 +6,7 @@ final class GoogleMlKitTextExtractor implements DocumentExtractor {
   static bool get isSupportedPlatform => false;
 
   @override
-  String get id => 'google-mlkit-text-latin';
+  String get id => 'google-mlkit-text-zh-latin';
 
   @override
   bool supportsMimeType(String mimeType) => _supportsImageMimeType(mimeType);
