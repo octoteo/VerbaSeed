@@ -12,7 +12,7 @@ import 'package:verbaseed_learner/src/data/course_installation_service.dart';
 import 'package:verbaseed_learner/src/data/document_import_coordinator.dart';
 
 void main() {
-  test('accepted draft installs, enrolls learner and seeds review cards', () async {
+  test('accepted draft installs, enrolls learners and seeds review cards', () async {
     final database = VerbaSeedDatabase(NativeDatabase.memory());
     final assets = MemoryContentAssetStore();
     addTearDown(() async {
@@ -78,6 +78,7 @@ void main() {
       reviewService: reviewService,
       installationRepository: installations,
       reviewRepository: reviews,
+      assetStore: assets,
     );
 
     final result = await service.installAcceptedDraft(
@@ -113,6 +114,24 @@ void main() {
       hasLength(1),
     );
     expect(await database.select(database.reviewCards).get(), hasLength(2));
+
+    final secondLearnerId = await learners.createProfile(displayName: 'Leo');
+    final enrollment = await service.enrollInstalledCourse(
+      courseId: 'import-course',
+      learnerId: secondLearnerId,
+    );
+    expect(enrollment.version, 1);
+    expect(enrollment.itemCount, 2);
+    expect(
+      await database.select(database.learnerCourseEnrollments).get(),
+      hasLength(2),
+    );
+    final allCards = await database.select(database.reviewCards).get();
+    expect(allCards, hasLength(4));
+    expect(
+      allCards.where((card) => card.learnerId == secondLearnerId),
+      hasLength(2),
+    );
   });
 
   test('draft must be accepted before installation', () async {
@@ -174,6 +193,7 @@ void main() {
       ),
       installationRepository: CourseInstallationRepository(database),
       reviewRepository: ReviewRepository(database),
+      assetStore: assets,
     );
 
     await expectLater(
