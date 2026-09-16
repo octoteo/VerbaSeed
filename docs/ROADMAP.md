@@ -1,65 +1,56 @@
-# Roadmap
+# VerbaSeed roadmap
 
-## v0.1 — Production foundation
+## v0.1 — production foundation
 
 - Flutter Android/Web application shell
-- responsive navigation and design system
 - Open Course Schema v0.1
-- FSRS scheduling adapter
-- CI quality gates
-- Vercel SPA configuration
-- architecture, copyright and contribution policies
+- FSRS learning-engine boundary
+- Sentence typing vertical slice
+- GitHub Actions quality gates
+- Vercel production deployment
 
-## v0.2 — Course compiler
+## v0.2 — local-first learner state (in progress)
 
-- camera/image OCR adapter
-- PDF importer
-- course validation and preview
-- immutable import staging
-- local course library
+- Drift/SQLite local source of truth across native and web
+- Multiple learner profiles with atomic active-profile switching
+- Serializable and persisted FSRS card state plus append-only review events
+- Local import-job queue
+- Content Source Protocol primitives for camera, PDF, GitHub, web, subtitles and pasted text
+- GitHub source validation and raw manifest resolution
+- Plain-text Course Compiler draft path
+- Drift Web worker + sqlite3 WASM build pipeline
 
-## v0.3 — Early-learning experience
+Next v0.2 increments:
 
-- phonemic-awareness activities
-- phonics progression
-- decodable reading activities
-- provider-based animation/video learning
-- subtitle-to-lesson pipeline
+- Durable large-file content store for PDF/image bytes
+- Camera and file picker adapters
+- OCR/layout extraction boundary and deterministic import retries
+- GitHub course manifest fetch, validation, version pinning and update checks
+- Backup/export/import of learner data
 
-## v0.4 — Local speech
+## v0.3 — early learning content
 
-- offline ASR adapter
-- offline TTS adapter
-- pronunciation assessment
-- British/American accent metadata and selection
+- Phonics progression
+- Decodable stories
+- Animation/provider integration without redistributing copyrighted media
+- Listening and repeat activities
 
-## v0.5 — Adaptive planner
+## v0.4 — local speech runtime
 
-- learner knowledge graph
-- skill-level mastery estimates
-- activity selection policy
-- FSRS review queues across words, phrases and sentences
+- Offline ASR/TTS runtime
+- Pronunciation assessment
+- British/American pronunciation assets
 
-## v0.6 — Course ecosystem
+## v0.5 — adaptive planner
 
-- GitHub course source
-- signed course manifests and integrity checks
-- Open Course Registry
-- update channels and rollback
+- Knowledge graph
+- Weak-skill detection
+- Activity selection based on learner history and FSRS state
 
-## v0.7 — Local AI
+## v1.0 — production learning system
 
-- AI gateway contracts
-- local/WebGPU runtime where supported
-- Ollama and OpenAI-compatible adapters
-- schema-constrained lesson generation
-
-## v1.0 — Public production release
-
-- Android production distribution
-- production Web/PWA deployment
-- backup/export/import
-- accessibility audit
-- child privacy review
-- performance budgets and observability
-- migration and disaster-recovery runbooks
+- End-to-end preschool + primary-school English learning flow
+- Stable course protocol and migration policy
+- Backup/restore and device migration
+- Accessibility, observability and failure recovery
+- Android release pipeline and production PWA

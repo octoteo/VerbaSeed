@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -13,11 +14,12 @@ class SettingsPage extends StatelessWidget {
         Card(
           child: Column(
             children: [
-              const ListTile(
-                leading: Icon(Icons.person_outline),
-                title: Text('学习者档案'),
-                subtitle: Text('本地优先 · 支持一个设备多个学习者'),
-                trailing: Icon(Icons.chevron_right),
+              ListTile(
+                leading: const Icon(Icons.person_outline),
+                title: const Text('学习者档案'),
+                subtitle: const Text('本地优先 · 支持一个设备多个学习者'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/profiles'),
               ),
               const Divider(height: 1),
               ListTile(
@@ -31,8 +33,8 @@ class SettingsPage extends StatelessWidget {
               const ListTile(
                 leading: Icon(Icons.cloud_off_outlined),
                 title: Text('离线与隐私'),
-                subtitle: Text('核心学习不需要账号或云服务'),
-                trailing: Icon(Icons.chevron_right),
+                subtitle: Text('学习者、复习状态与导入任务默认保存在设备本地'),
+                trailing: Icon(Icons.verified_user_outlined),
               ),
             ],
           ),
@@ -44,9 +46,9 @@ class SettingsPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('VerbaSeed 0.1.0', style: Theme.of(context).textTheme.titleMedium),
+                Text('VerbaSeed 0.2.0', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
-                const Text('AGPL-3.0 · Local-first · Open Course Protocol'),
+                const Text('AGPL-3.0 · Local-first · Drift/SQLite · Open Course Protocol'),
               ],
             ),
           ),

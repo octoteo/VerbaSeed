@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://verbaseed.org/schemas/content-source.schema.json",
+  "title": "VerbaSeed Content Source",
+  "type": "object",
+  "required": ["type", "displayName", "metadata"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["cameraImage", "pdf", "github", "web", "subtitle", "plainText"]
+    },
+    "displayName": { "type": "string", "minLength": 1 },
+    "uri": { "type": ["string", "null"], "format": "uri" },
+    "metadata": { "type": "object" }
+  },
+  "additionalProperties": false
+}

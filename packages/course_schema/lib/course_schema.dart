@@ -48,6 +48,22 @@ final class Course {
         'version': version,
         'units': units.map((unit) => unit.toJson()).toList(),
       };
+
+  factory Course.fromJson(Map<String, Object?> json) => Course(
+        id: json['id']! as String,
+        title: json['title']! as String,
+        sourceLanguage: json['sourceLanguage']! as String,
+        targetLanguage: json['targetLanguage']! as String,
+        minimumAge: _intOrNull(json['minimumAge']),
+        maximumAge: _intOrNull(json['maximumAge']),
+        defaultAccent: Accent.values.byName(
+          (json['defaultAccent'] as String?) ?? Accent.curriculum.name,
+        ),
+        version: (json['version'] as String?) ?? '0.1.0',
+        units: _objectList(json['units'])
+            .map((unit) => CourseUnit.fromJson(_objectMap(unit)))
+            .toList(growable: false),
+      );
 }
 
 final class CourseUnit {
@@ -62,6 +78,14 @@ final class CourseUnit {
         'title': title,
         'lessons': lessons.map((lesson) => lesson.toJson()).toList(),
       };
+
+  factory CourseUnit.fromJson(Map<String, Object?> json) => CourseUnit(
+        id: json['id']! as String,
+        title: json['title']! as String,
+        lessons: _objectList(json['lessons'])
+            .map((lesson) => Lesson.fromJson(_objectMap(lesson)))
+            .toList(growable: false),
+      );
 }
 
 final class Lesson {
@@ -83,6 +107,17 @@ final class Lesson {
         'items': items.map((item) => item.toJson()).toList(),
         'activities': activities.map((activity) => activity.name).toList(),
       };
+
+  factory Lesson.fromJson(Map<String, Object?> json) => Lesson(
+        id: json['id']! as String,
+        title: json['title']! as String,
+        items: _objectList(json['items'])
+            .map((item) => LearningItem.fromJson(_objectMap(item)))
+            .toList(growable: false),
+        activities: _objectList(json['activities'])
+            .map((activity) => LearningActivityType.values.byName(activity as String))
+            .toList(growable: false),
+      );
 }
 
 final class LearningItem {
@@ -110,6 +145,17 @@ final class LearningItem {
         'ipaAmerican': ipaAmerican,
         'phonics': phonics.map((segment) => segment.toJson()).toList(),
       };
+
+  factory LearningItem.fromJson(Map<String, Object?> json) => LearningItem(
+        id: json['id']! as String,
+        text: json['text']! as String,
+        translation: (json['translation'] as String?) ?? '',
+        ipaBritish: json['ipaBritish'] as String?,
+        ipaAmerican: json['ipaAmerican'] as String?,
+        phonics: _objectList(json['phonics'])
+            .map((segment) => PhonicsSegment.fromJson(_objectMap(segment)))
+            .toList(growable: false),
+      );
 }
 
 final class PhonicsSegment {
@@ -119,4 +165,21 @@ final class PhonicsSegment {
   final String phoneme;
 
   Map<String, Object?> toJson() => {'grapheme': grapheme, 'phoneme': phoneme};
+
+  factory PhonicsSegment.fromJson(Map<String, Object?> json) => PhonicsSegment(
+        grapheme: json['grapheme']! as String,
+        phoneme: json['phoneme']! as String,
+      );
 }
+
+int? _intOrNull(Object? value) => switch (value) {
+      final int value => value,
+      final num value => value.toInt(),
+      _ => null,
+    };
+
+List<Object?> _objectList(Object? value) =>
+    value is List ? List<Object?>.from(value) : const [];
+
+Map<String, Object?> _objectMap(Object? value) =>
+    Map<String, Object?>.from(value! as Map);

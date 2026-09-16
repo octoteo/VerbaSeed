@@ -6,6 +6,7 @@ import 'features/explore/explore_page.dart';
 import 'features/home/home_page.dart';
 import 'features/import/import_page.dart';
 import 'features/practice/sentence_typing_page.dart';
+import 'features/profiles/profiles_page.dart';
 import 'features/settings/settings_page.dart';
 import 'shell/app_shell.dart';
 
@@ -54,6 +55,10 @@ GoRouter createRouter() => GoRouter(
               ],
             ),
           ],
+        ),
+        GoRoute(
+          path: '/profiles',
+          builder: (context, state) => const ProfilesPage(),
         ),
         GoRoute(
           path: '/practice/typing',
