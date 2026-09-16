@@ -190,6 +190,16 @@ final class CourseInstallationRepository {
         .getSingleOrNull();
   }
 
+  Future<InstalledCourse?> installedCourse(String courseId) {
+    final normalizedCourseId = courseId.trim();
+    if (normalizedCourseId.isEmpty) {
+      throw const FormatException('courseId cannot be empty');
+    }
+    return (_db.select(_db.installedCourses)
+          ..where((table) => table.id.equals(normalizedCourseId)))
+        .getSingleOrNull();
+  }
+
   Future<InstalledCourseVersion> setCurrentVersion({
     required String courseId,
     required int version,

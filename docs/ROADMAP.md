@@ -60,10 +60,12 @@ Completed foundation:
 - Device default course version can be switched or rolled back without mutating immutable course assets
 - Existing learner enrollments remain pinned to their current version when the device default changes
 - New installations use monotonic version numbers even after the default is rolled back
+- Validated GitHub course imports can be explicitly materialized as content-addressed local course versions without auto-enrolling a learner
+- GitHub update checks are user-triggered and pin the preview to one resolved commit before any upgrade is confirmed
+- Confirmed GitHub upgrades install exactly the previewed commit, reject stale previews, preserve existing learner pins and remain rollbackable through local version history
 
 Next v0.2 increments:
 
-- GitHub update checks with user-controlled upgrades and rollback
 - Backup/export/import of learner data and course manifests
 - Production Android signing and release-distribution workflow
 

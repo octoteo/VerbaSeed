@@ -23,6 +23,14 @@ class SettingsPage extends StatelessWidget {
               ),
               const Divider(height: 1),
               ListTile(
+                leading: const Icon(Icons.sync_outlined),
+                title: const Text('GitHub 课程与更新'),
+                subtitle: const Text('手动检查、预览和升级；历史版本可随时回滚'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/settings/github-courses'),
+              ),
+              const Divider(height: 1),
+              ListTile(
                 leading: const Icon(Icons.record_voice_over_outlined),
                 title: const Text('默认发音'),
                 subtitle: const Text('跟随课程（支持英音 / 美音）'),
@@ -46,7 +54,7 @@ class SettingsPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('VerbaSeed 0.2.11', style: Theme.of(context).textTheme.titleMedium),
+                Text('VerbaSeed 0.2.12', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
                 const Text('AGPL-3.0 · Local-first · Drift/SQLite · Open Course Protocol'),
               ],

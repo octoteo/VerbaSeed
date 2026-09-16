@@ -8,6 +8,7 @@ import 'package:pdf_extractor_pdfrx/pdf_extractor_pdfrx.dart';
 import 'course_draft_review_service.dart';
 import 'course_installation_service.dart';
 import 'document_import_coordinator.dart';
+import 'github_course_sync_service.dart';
 
 final databaseProvider = Provider<VerbaSeedDatabase>((ref) {
   final database = openVerbaSeedDatabase();
@@ -83,6 +84,15 @@ final courseInstallationServiceProvider = Provider<CourseInstallationService>(
     reviewService: ref.watch(courseDraftReviewServiceProvider),
     installationRepository: ref.watch(courseInstallationRepositoryProvider),
     reviewRepository: ref.watch(reviewRepositoryProvider),
+    assetStore: ref.watch(contentAssetStoreProvider),
+  ),
+);
+
+final githubCourseSyncServiceProvider = Provider<GitHubCourseSyncService>(
+  (ref) => GitHubCourseSyncService(
+    remote: ref.watch(githubCourseClientProvider),
+    importRepository: ref.watch(importRepositoryProvider),
+    installationRepository: ref.watch(courseInstallationRepositoryProvider),
     assetStore: ref.watch(contentAssetStoreProvider),
   ),
 );

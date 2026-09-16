@@ -223,6 +223,10 @@ final class ImportRepository {
     return query.watch();
   }
 
+  Future<ImportJob?> getJob(String id) =>
+      (_db.select(_db.importJobs)..where((table) => table.id.equals(id)))
+          .getSingleOrNull();
+
   Future<String> enqueue(
     ContentSource source, {
     String? learnerId,
