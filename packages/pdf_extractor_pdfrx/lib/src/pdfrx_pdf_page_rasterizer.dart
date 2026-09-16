@@ -141,8 +141,14 @@ final class PdfrxPdfPageRasterizer implements PdfPageRasterizer {
     if (longestAtTargetDpi > maxDimension) {
       scale *= maxDimension / longestAtTargetDpi;
     }
-    final width = (pageWidth * scale).round().clamp(1, maxDimension);
-    final height = (pageHeight * scale).round().clamp(1, maxDimension);
+    final width = _boundDimension((pageWidth * scale).round());
+    final height = _boundDimension((pageHeight * scale).round());
     return (width: width, height: height);
+  }
+
+  int _boundDimension(int value) {
+    if (value < 1) return 1;
+    if (value > maxDimension) return maxDimension;
+    return value;
   }
 }
