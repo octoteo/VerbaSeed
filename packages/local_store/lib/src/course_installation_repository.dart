@@ -40,6 +40,13 @@ final class CourseInstallationRepository {
     return query.watch();
   }
 
+  Stream<List<InstalledCourseVersion>> watchVersions(String courseId) {
+    final query = _db.select(_db.installedCourseVersions)
+      ..where((table) => table.courseId.equals(courseId))
+      ..orderBy([(table) => OrderingTerm.desc(table.version)]);
+    return query.watch();
+  }
+
   Future<CourseInstallationResult> installCourse({
     required String courseId,
     required String title,
@@ -100,7 +107,12 @@ final class CourseInstallationRepository {
       }
 
       final now = _now();
-      final nextVersion = (current?.currentVersion ?? 0) + 1;
+      final latestInstalledVersion = await (_db.select(_db.installedCourseVersions)
+            ..where((table) => table.courseId.equals(normalizedCourseId))
+            ..orderBy([(table) => OrderingTerm.desc(table.version)])
+            ..limit(1))
+          .getSingleOrNull();
+      final nextVersion = (latestInstalledVersion?.version ?? 0) + 1;
       if (current == null) {
         await _db.into(_db.installedCourses).insert(
               InstalledCoursesCompanion.insert(
@@ -146,6 +158,48 @@ final class CourseInstallationRepository {
         assetId: normalizedAssetId,
         reused: false,
       );
+    });
+  }
+
+  Future<InstalledCourseVersion> setCurrentVersion({
+    required String courseId,
+    required int version,
+  }) async {
+    if (version < 1) {
+      throw RangeError.range(version, 1, null, 'version');
+    }
+
+    return _db.transaction(() async {
+      final course = await (_db.select(_db.installedCourses)
+            ..where((table) => table.id.equals(courseId)))
+          .getSingleOrNull();
+      if (course == null) {
+        throw StateError('本地课程不存在: $courseId');
+      }
+
+      final target = await (_db.select(_db.installedCourseVersions)
+            ..where(
+              (table) =>
+                  table.courseId.equals(courseId) & table.version.equals(version),
+            ))
+          .getSingleOrNull();
+      if (target == null) {
+        throw StateError('课程版本不存在: $courseId@$version');
+      }
+
+      if (course.currentVersion != version ||
+          course.sourceJobId != target.sourceJobId) {
+        await (_db.update(_db.installedCourses)
+              ..where((table) => table.id.equals(courseId)))
+            .write(
+          InstalledCoursesCompanion(
+            currentVersion: Value(version),
+            sourceJobId: Value(target.sourceJobId),
+            updatedAt: Value(_now()),
+          ),
+        );
+      }
+      return target;
     });
   }
 
