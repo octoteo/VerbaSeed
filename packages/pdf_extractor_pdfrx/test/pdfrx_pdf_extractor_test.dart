@@ -1,14 +1,16 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:document_processing/document_processing.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pdf_extractor_pdfrx/pdf_extractor_pdfrx.dart';
+import 'package:pdfrx/pdfrx.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const extractor = PdfrxPdfExtractor();
+  final pdfiumPath = Platform.environment['PDFIUM_PATH'];
 
   test('advertises PDF MIME support only', () {
     expect(extractor.supportsMimeType('application/pdf'), isTrue);
@@ -37,52 +39,52 @@ void main() {
     );
   });
 
-  test('extracts text and normalized layout from a real PDF', () async {
-    const pathProviderChannel = MethodChannel('plugins.flutter.io/path_provider');
-    final temporaryDirectory = await Directory.systemTemp.createTemp(
-      'verbaseed-pdfrx-test-',
-    );
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(
-      pathProviderChannel,
-      (_) async => temporaryDirectory.path,
-    );
-    addTearDown(() async {
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(pathProviderChannel, null);
-      if (await temporaryDirectory.exists()) {
-        await temporaryDirectory.delete(recursive: true);
+  test(
+    'extracts text and normalized layout from a real PDF',
+    () async {
+      final temporaryDirectory = await Directory.systemTemp.createTemp(
+        'verbaseed-pdfrx-test-',
+      );
+      Pdfrx.pdfiumModulePath = pdfiumPath!;
+      Pdfrx.cacheDirectoryPath = temporaryDirectory.path;
+      addTearDown(() async {
+        if (await temporaryDirectory.exists()) {
+          await temporaryDirectory.delete(recursive: true);
+        }
+      });
+
+      final document = await extractor.extract(
+        DocumentExtractionRequest(
+          assetId: 'asset-real-pdf',
+          mimeType: 'application/pdf',
+          bytes: _buildSimplePdf(),
+          sourceName: 'fixture.pdf',
+        ),
+      );
+
+      expect(document.providerId, extractor.id);
+      expect(document.pages, hasLength(1));
+      expect(document.plainText, contains('Hello VerbaSeed'));
+      expect(document.pages.single.blocks, isNotEmpty);
+      expect(
+        document.pages.single.blocks.any(
+          (block) => block.text.contains('Hello VerbaSeed'),
+        ),
+        isTrue,
+      );
+      for (final block in document.pages.single.blocks) {
+        final bounds = block.bounds;
+        if (bounds == null) continue;
+        expect(bounds.left, inInclusiveRange(0.0, 1.0));
+        expect(bounds.top, inInclusiveRange(0.0, 1.0));
+        expect(bounds.left + bounds.width, lessThanOrEqualTo(1.0));
+        expect(bounds.top + bounds.height, lessThanOrEqualTo(1.0));
       }
-    });
-
-    final document = await extractor.extract(
-      DocumentExtractionRequest(
-        assetId: 'asset-real-pdf',
-        mimeType: 'application/pdf',
-        bytes: _buildSimplePdf(),
-        sourceName: 'fixture.pdf',
-      ),
-    );
-
-    expect(document.providerId, extractor.id);
-    expect(document.pages, hasLength(1));
-    expect(document.plainText, contains('Hello VerbaSeed'));
-    expect(document.pages.single.blocks, isNotEmpty);
-    expect(
-      document.pages.single.blocks.any(
-        (block) => block.text.contains('Hello VerbaSeed'),
-      ),
-      isTrue,
-    );
-    for (final block in document.pages.single.blocks) {
-      final bounds = block.bounds;
-      if (bounds == null) continue;
-      expect(bounds.left, inInclusiveRange(0.0, 1.0));
-      expect(bounds.top, inInclusiveRange(0.0, 1.0));
-      expect(bounds.left + bounds.width, lessThanOrEqualTo(1.0));
-      expect(bounds.top + bounds.height, lessThanOrEqualTo(1.0));
-    }
-  });
+    },
+    skip: pdfiumPath == null
+        ? 'Set PDFIUM_PATH to run the real PDFium extraction fixture.'
+        : false,
+  );
 }
 
 Uint8List _buildSimplePdf() {
