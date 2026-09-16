@@ -1,7 +1,7 @@
 name: verbaseed_learner
 description: VerbaSeed learner application.
 publish_to: none
-version: 0.2.11+13
+version: 0.2.12+14
 
 environment:
   sdk: '>=3.13.0 <4.0.0'

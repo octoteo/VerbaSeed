@@ -24,6 +24,51 @@ final class GitHubCourseSnapshot {
     this.etag,
   });
 
+  factory GitHubCourseSnapshot.fromMetadata(Map<String, Object?> metadata) {
+    final owner = metadata['owner'] as String?;
+    final repository = metadata['repository'] as String?;
+    final requestedRef =
+        (metadata['requestedRef'] ?? metadata['ref']) as String? ?? 'main';
+    final subpath = metadata['subpath'] as String? ?? '';
+    final resolvedCommit = metadata['resolvedCommit'] as String?;
+    final rawCourse = metadata['course'];
+    final rawFetchedAt = metadata['fetchedAt'] as String?;
+    if (owner == null || owner.trim().isEmpty) {
+      throw const FormatException('missing GitHub owner');
+    }
+    if (repository == null || repository.trim().isEmpty) {
+      throw const FormatException('missing GitHub repository');
+    }
+    if (resolvedCommit == null) {
+      throw const FormatException('missing resolved commit');
+    }
+    final commitSha = _normalizeCommitSha(resolvedCommit);
+    if (rawCourse is! Map) {
+      throw const FormatException('missing GitHub course manifest');
+    }
+    if (rawFetchedAt == null) {
+      throw const FormatException('missing GitHub fetch timestamp');
+    }
+
+    final source = GitHubCourseSource(
+      owner: owner,
+      repository: repository,
+      ref: requestedRef,
+      subpath: subpath,
+    );
+    final rawManifestUri = metadata['manifestUri'] as String?;
+    return GitHubCourseSnapshot(
+      source: source,
+      commitSha: commitSha,
+      manifestUri: rawManifestUri == null
+          ? source.manifestUri(resolvedRef: commitSha)
+          : Uri.parse(rawManifestUri),
+      course: Course.fromJson(Map<String, Object?>.from(rawCourse)),
+      fetchedAt: DateTime.parse(rawFetchedAt).toUtc(),
+      etag: metadata['etag'] as String?,
+    );
+  }
+
   final GitHubCourseSource source;
   final String commitSha;
   final Uri manifestUri;
@@ -44,7 +89,26 @@ final class GitHubCourseSnapshot {
       };
 }
 
-final class GitHubCourseClient {
+abstract interface class GitHubCourseRemote {
+  Future<GitHubCourseSnapshot> fetch(
+    GitHubCourseSource source, {
+    String manifestName = 'course.json',
+  });
+
+  Future<GitHubCourseSnapshot> fetchAtCommit(
+    GitHubCourseSource source,
+    String commitSha, {
+    String manifestName = 'course.json',
+  });
+
+  Future<GitHubCourseSnapshot?> fetchUpdate(
+    GitHubCourseSource source, {
+    required String currentCommitSha,
+    String manifestName = 'course.json',
+  });
+}
+
+final class GitHubCourseClient implements GitHubCourseRemote {
   GitHubCourseClient({http.Client? client})
       : _client = client ?? http.Client(),
         _ownsClient = client == null;
@@ -54,14 +118,29 @@ final class GitHubCourseClient {
   final http.Client _client;
   final bool _ownsClient;
 
+  @override
   Future<GitHubCourseSnapshot> fetch(
     GitHubCourseSource source, {
     String manifestName = 'course.json',
   }) async {
     final commitSha = await resolveCommit(source);
+    return fetchAtCommit(
+      source,
+      commitSha,
+      manifestName: manifestName,
+    );
+  }
+
+  @override
+  Future<GitHubCourseSnapshot> fetchAtCommit(
+    GitHubCourseSource source,
+    String commitSha, {
+    String manifestName = 'course.json',
+  }) async {
+    final normalizedCommit = _normalizeCommitSha(commitSha);
     final manifestUri = source.manifestUri(
       manifestName: manifestName,
-      resolvedRef: commitSha,
+      resolvedRef: normalizedCommit,
     );
     final response = await _client.get(manifestUri);
     if (response.statusCode != 200) {
@@ -79,7 +158,7 @@ final class GitHubCourseClient {
       _validateCourse(course);
       return GitHubCourseSnapshot(
         source: source,
-        commitSha: commitSha,
+        commitSha: normalizedCommit,
         manifestUri: manifestUri,
         course: course,
         fetchedAt: DateTime.now().toUtc(),
@@ -90,6 +169,22 @@ final class GitHubCourseClient {
     } on Object catch (error) {
       throw ContentSourceException('课程清单格式无效: $error');
     }
+  }
+
+  @override
+  Future<GitHubCourseSnapshot?> fetchUpdate(
+    GitHubCourseSource source, {
+    required String currentCommitSha,
+    String manifestName = 'course.json',
+  }) async {
+    final current = _normalizeCommitSha(currentCommitSha);
+    final resolved = await resolveCommit(source);
+    if (resolved == current) return null;
+    return fetchAtCommit(
+      source,
+      resolved,
+      manifestName: manifestName,
+    );
   }
 
   Future<String> resolveCommit(GitHubCourseSource source) async {
@@ -113,10 +208,10 @@ final class GitHubCourseClient {
     try {
       final decoded = jsonDecode(response.body);
       final sha = (decoded as Map)['sha'] as String?;
-      if (sha == null || !RegExp(r'^[0-9a-fA-F]{40}$').hasMatch(sha)) {
+      if (sha == null) {
         throw const FormatException('missing commit sha');
       }
-      return sha.toLowerCase();
+      return _normalizeCommitSha(sha);
     } on Object catch (error) {
       throw ContentSourceException('GitHub 版本响应格式无效: $error');
     }
@@ -137,4 +232,12 @@ final class GitHubCourseClient {
       throw const ContentSourceException('课程必须包含 id、title、targetLanguage 和至少一个 unit');
     }
   }
+}
+
+String _normalizeCommitSha(String value) {
+  final normalized = value.trim().toLowerCase();
+  if (!RegExp(r'^[0-9a-f]{40}$').hasMatch(normalized)) {
+    throw const FormatException('invalid GitHub commit sha');
+  }
+  return normalized;
 }
