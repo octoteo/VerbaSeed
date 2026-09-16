@@ -59,6 +59,25 @@ jobs:
         working-directory: packages/content_store
         run: flutter test
 
+  flutter-pdf-extractor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve dependencies
+        working-directory: packages/pdf_extractor_pdfrx
+        run: flutter pub get
+      - name: Analyze
+        working-directory: packages/pdf_extractor_pdfrx
+        run: flutter analyze --fatal-infos
+      - name: Test
+        working-directory: packages/pdf_extractor_pdfrx
+        run: flutter test
+
   flutter-local-store:
     runs-on: ubuntu-latest
     timeout-minutes: 15

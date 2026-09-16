@@ -2,6 +2,9 @@ import 'package:content_source/content_source.dart';
 import 'package:content_store/content_store.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_store/local_store.dart';
+import 'package:pdf_extractor_pdfrx/pdf_extractor_pdfrx.dart';
+
+import 'document_import_coordinator.dart';
 
 final databaseProvider = Provider<VerbaSeedDatabase>((ref) {
   final database = openVerbaSeedDatabase();
@@ -25,6 +28,10 @@ final githubCourseClientProvider = Provider<GitHubCourseClient>((ref) {
   return client;
 });
 
+final pdfExtractorProvider = Provider<PdfrxPdfExtractor>(
+  (ref) => const PdfrxPdfExtractor(),
+);
+
 final learnerRepositoryProvider = Provider<LearnerRepository>(
   (ref) => LearnerRepository(ref.watch(databaseProvider)),
 );
@@ -35,6 +42,14 @@ final reviewRepositoryProvider = Provider<ReviewRepository>(
 
 final importRepositoryProvider = Provider<ImportRepository>(
   (ref) => ImportRepository(ref.watch(databaseProvider)),
+);
+
+final documentImportCoordinatorProvider = Provider<DocumentImportCoordinator>(
+  (ref) => DocumentImportCoordinator(
+    repository: ref.watch(importRepositoryProvider),
+    assetStore: ref.watch(contentAssetStoreProvider),
+    pdfExtractor: ref.watch(pdfExtractorProvider),
+  ),
 );
 
 final learnerProfilesProvider = StreamProvider<List<LearnerProfile>>(

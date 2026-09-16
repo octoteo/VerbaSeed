@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_store/local_store.dart';
 import 'package:mime/mime.dart';
 
+import '../../data/document_import_coordinator.dart';
 import '../../data/providers.dart';
 import 'camera_capture_page.dart';
 
@@ -25,6 +26,7 @@ class ImportPage extends ConsumerWidget {
     final repository = ref.watch(importRepositoryProvider);
     final assetStore = ref.watch(contentAssetStoreProvider);
     final githubClient = ref.watch(githubCourseClientProvider);
+    final documentCoordinator = ref.watch(documentImportCoordinatorProvider);
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -52,7 +54,7 @@ class ImportPage extends ConsumerWidget {
             _SourceCard(
               icon: Icons.picture_as_pdf_outlined,
               title: 'PDF',
-              subtitle: '选择 PDF 并持久化原文件，随后进入版面/OCR 解析状态机',
+              subtitle: '选择 PDF 并持久化原文件，可按页范围提取本地文本与版面',
               onTap: () => _pickPdf(context, assetStore, repository),
             ),
             _SourceCard(
@@ -83,23 +85,11 @@ class ImportPage extends ConsumerWidget {
               : Column(
                   children: [
                     for (final job in items)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Card(
-                          child: ListTile(
-                            leading: Icon(_statusIcon(job.status)),
-                            title: Text(job.displayName),
-                            subtitle: Text(
-                              '${job.sourceType} · ${_statusLabel(job.status)}'
-                              '${_documentProcessingLabel(repository.decodeSource(job))}'
-                              '${job.errorMessage == null ? '' : '\n${job.errorMessage}'}',
-                            ),
-                            isThreeLine: job.errorMessage != null,
-                            trailing: Text(
-                              '${job.createdAt.toLocal().month}/${job.createdAt.toLocal().day}',
-                            ),
-                          ),
-                        ),
+                      _buildJobCard(
+                        context,
+                        job,
+                        repository,
+                        documentCoordinator,
                       ),
                   ],
                 ),
@@ -108,6 +98,197 @@ class ImportPage extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  Widget _buildJobCard(
+    BuildContext context,
+    ImportJob job,
+    ImportRepository repository,
+    DocumentImportCoordinator documentCoordinator,
+  ) {
+    final source = repository.decodeSource(job);
+    final processingState = _documentProcessingState(source);
+    final showPdfAction = source.type == ContentSourceType.pdf &&
+        (processingState == null || !processingState.isTerminal);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Card(
+        child: ListTile(
+          leading: Icon(_statusIcon(job.status)),
+          title: Text(job.displayName),
+          subtitle: Text(
+            '${job.sourceType} · ${_statusLabel(job.status)}'
+            '${_documentProcessingLabel(source)}'
+            '${job.errorMessage == null ? '' : '\n${job.errorMessage}'}',
+          ),
+          isThreeLine: job.errorMessage != null || processingState != null,
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${job.createdAt.toLocal().month}/${job.createdAt.toLocal().day}',
+              ),
+              if (showPdfAction) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: _pdfActionTooltip(processingState),
+                  onPressed: () => _processPdf(
+                    context,
+                    job,
+                    source,
+                    processingState,
+                    documentCoordinator,
+                  ),
+                  icon: Icon(_pdfActionIcon(processingState)),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _processPdf(
+    BuildContext context,
+    ImportJob job,
+    ContentSource source,
+    DocumentProcessingState? processingState,
+    DocumentImportCoordinator coordinator,
+  ) async {
+    PageRange? pageRange;
+    var replacePageRange = false;
+    if (processingState == null ||
+        (processingState.phase == DocumentProcessingPhase.queued &&
+            processingState.attempt == 0)) {
+      final selection = await _selectPageRange(
+        context,
+        existing: _pageRangeFromSource(source),
+      );
+      if (selection == null || !context.mounted) return;
+      pageRange = selection.range;
+      replacePageRange = true;
+    }
+
+    try {
+      final result = await coordinator.processPdf(
+        job,
+        pageRange: pageRange,
+        replacePageRange: replacePageRange,
+      );
+      if (!context.mounted) return;
+      final message = switch (result.phase) {
+        DocumentProcessingPhase.succeeded => 'PDF 文本与版面解析完成，结果已安全保存到本机',
+        DocumentProcessingPhase.retryScheduled =>
+          '本次解析未完成，将在 ${_formatRetryTime(result.nextAttemptAt)} 后允许重试',
+        DocumentProcessingPhase.extracting => '解析任务仍在处理中；异常中断后会按超时规则恢复',
+        DocumentProcessingPhase.failed =>
+          'PDF 解析失败：${result.lastErrorMessage ?? result.lastErrorCode ?? '未知错误'}',
+        DocumentProcessingPhase.cancelled => 'PDF 解析已取消',
+        DocumentProcessingPhase.queued => 'PDF 已进入解析队列',
+      };
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } on Object catch (error) {
+      if (context.mounted) _showError(context, 'PDF 解析失败', error);
+    }
+  }
+
+  Future<_PageRangeSelection?> _selectPageRange(
+    BuildContext context, {
+    PageRange? existing,
+  }) async {
+    final startController = TextEditingController(
+      text: existing?.startPage.toString() ?? '',
+    );
+    final endController = TextEditingController(
+      text: existing?.endPage.toString() ?? '',
+    );
+    String? validationError;
+
+    final selection = await showDialog<_PageRangeSelection>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('选择 PDF 解析范围'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('留空并选择“全部页面”，或输入起止页码。页码从 1 开始。'),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: startController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: '起始页'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: endController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: '结束页'),
+                      ),
+                    ),
+                  ],
+                ),
+                if (validationError != null) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    validationError!,
+                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(
+                dialogContext,
+                const _PageRangeSelection(range: null),
+              ),
+              child: const Text('全部页面'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final start = int.tryParse(startController.text.trim());
+                final end = int.tryParse(endController.text.trim());
+                if (start == null || end == null || start < 1 || end < start) {
+                  setState(() {
+                    validationError = '请输入有效页码，并确保结束页不小于起始页。';
+                  });
+                  return;
+                }
+                Navigator.pop(
+                  dialogContext,
+                  _PageRangeSelection(
+                    range: PageRange(startPage: start, endPage: end),
+                  ),
+                );
+              },
+              child: const Text('解析所选页面'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    startController.dispose();
+    endController.dispose();
+    return selection;
   }
 
   Future<void> _captureImage(
@@ -406,21 +587,46 @@ class ImportPage extends ConsumerWidget {
     );
   }
 
+  static DocumentProcessingState? _documentProcessingState(
+    ContentSource source,
+  ) {
+    try {
+      return documentProcessingStateFromMetadata(source.metadata);
+    } on Object {
+      return null;
+    }
+  }
+
+  static PageRange? _pageRangeFromSource(ContentSource source) {
+    final raw = source.metadata['pageRange'];
+    if (raw is! Map) return null;
+    try {
+      return PageRange.fromJson(Map<String, Object?>.from(raw));
+    } on Object {
+      return null;
+    }
+  }
+
   static String _documentProcessingLabel(ContentSource source) {
     final raw = source.metadata[documentProcessingMetadataKey];
     if (raw == null) return '';
     try {
       final state = documentProcessingStateFromMetadata(source.metadata)!;
+      final requiresOcr = source.metadata['requiresOcr'] == true;
+      final range = _pageRangeFromSource(source);
+      final rangeText = range == null ? '' : ' · 页 ${range.startPage}-${range.endPage}';
       final label = switch (state.phase) {
-        DocumentProcessingPhase.queued => '待处理',
+        DocumentProcessingPhase.queued => '待处理$rangeText',
         DocumentProcessingPhase.extracting =>
-          '处理中（${state.attempt}/${state.maxAttempts}）',
+          '处理中（${state.attempt}/${state.maxAttempts}）$rangeText',
         DocumentProcessingPhase.retryScheduled =>
-          '等待重试（已尝试 ${state.attempt}/${state.maxAttempts}）',
-        DocumentProcessingPhase.succeeded => '已完成',
+          '等待重试（已尝试 ${state.attempt}/${state.maxAttempts}）$rangeText',
+        DocumentProcessingPhase.succeeded when requiresOcr =>
+          '文本层为空，等待 OCR$rangeText',
+        DocumentProcessingPhase.succeeded => '已完成$rangeText',
         DocumentProcessingPhase.failed =>
-          '失败：${state.lastErrorMessage ?? state.lastErrorCode ?? '未知错误'}',
-        DocumentProcessingPhase.cancelled => '已取消',
+          '失败：${state.lastErrorMessage ?? state.lastErrorCode ?? '未知错误'}$rangeText',
+        DocumentProcessingPhase.cancelled => '已取消$rangeText',
       };
       return '\n文档解析：$label';
     } on Object catch (error) {
@@ -445,11 +651,39 @@ class ImportPage extends ConsumerWidget {
         _ => Icons.schedule_outlined,
       };
 
+  static IconData _pdfActionIcon(DocumentProcessingState? state) =>
+      switch (state?.phase) {
+        DocumentProcessingPhase.retryScheduled => Icons.refresh,
+        DocumentProcessingPhase.extracting => Icons.restore,
+        _ => Icons.play_arrow,
+      };
+
+  static String _pdfActionTooltip(DocumentProcessingState? state) =>
+      switch (state?.phase) {
+        DocumentProcessingPhase.retryScheduled => '重试 PDF 解析',
+        DocumentProcessingPhase.extracting => '检查并恢复解析任务',
+        _ => '解析 PDF 文本与版面',
+      };
+
+  static String _formatRetryTime(DateTime? value) {
+    if (value == null) return '稍后';
+    final local = value.toLocal();
+    final minute = local.minute.toString().padLeft(2, '0');
+    final second = local.second.toString().padLeft(2, '0');
+    return '${local.hour}:$minute:$second';
+  }
+
   static String _formatBytes(int bytes) {
     if (bytes >= 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MiB';
     if (bytes >= 1024) return '${(bytes / 1024).toStringAsFixed(1)} KiB';
     return '$bytes B';
   }
+}
+
+final class _PageRangeSelection {
+  const _PageRangeSelection({required this.range});
+
+  final PageRange? range;
 }
 
 class _SourceCard extends StatelessWidget {
