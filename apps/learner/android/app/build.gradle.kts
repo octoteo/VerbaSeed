@@ -27,6 +27,10 @@ android {
             // Production signing is intentionally supplied by CI/release secrets later.
             // Debug signing keeps local and CI release compilation reproducible for now.
             signingConfig = signingConfigs.getByName("debug")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }
