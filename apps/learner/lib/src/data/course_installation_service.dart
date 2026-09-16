@@ -101,6 +101,29 @@ final class CourseInstallationService {
     );
   }
 
+  Future<InstalledCourseVersion> setCurrentVersion({
+    required String courseId,
+    required int version,
+  }) async {
+    final target = await _installationRepository.installedVersion(
+      courseId: courseId,
+      version: version,
+    );
+    if (target == null) {
+      throw StateError('课程版本不存在: $courseId@$version');
+    }
+
+    final course = await _loadCourseVersion(
+      courseId: courseId,
+      installedVersion: target,
+    );
+    return _installationRepository.setCurrentVersion(
+      courseId: courseId,
+      version: version,
+      title: course.title,
+    );
+  }
+
   Future<CourseEnrollmentSummary> enrollInstalledCourse({
     required String courseId,
     required String learnerId,
@@ -111,18 +134,10 @@ final class CourseInstallationService {
       throw StateError('本地课程不存在: $courseId');
     }
 
-    final bytes = await _assetStore.read(installedVersion.assetId);
-    if (bytes == null) {
-      throw StateError('课程内容资产已不存在，请重新导入课程');
-    }
-    final decoded = jsonDecode(utf8.decode(bytes));
-    if (decoded is! Map) {
-      throw const FormatException('已安装课程不是有效的 JSON 对象');
-    }
-    final course = Course.fromJson(Map<String, Object?>.from(decoded));
-    if (course.id != courseId) {
-      throw StateError('课程内容资产与安装记录不一致: ${course.id} != $courseId');
-    }
+    final course = await _loadCourseVersion(
+      courseId: courseId,
+      installedVersion: installedVersion,
+    );
     final itemCount = await _enrollCourse(
       learnerId: learnerId,
       course: course,
@@ -135,6 +150,25 @@ final class CourseInstallationService {
       itemCount: itemCount,
       seededReviewCardCount: itemCount,
     );
+  }
+
+  Future<Course> _loadCourseVersion({
+    required String courseId,
+    required InstalledCourseVersion installedVersion,
+  }) async {
+    final bytes = await _assetStore.read(installedVersion.assetId);
+    if (bytes == null) {
+      throw StateError('课程内容资产已不存在，请重新导入课程');
+    }
+    final decoded = jsonDecode(utf8.decode(bytes));
+    if (decoded is! Map) {
+      throw const FormatException('已安装课程不是有效的 JSON 对象');
+    }
+    final course = Course.fromJson(Map<String, Object?>.from(decoded));
+    if (course.id != courseId) {
+      throw StateError('课程内容资产与安装记录不一致: ${course.id} != $courseId');
+    }
+    return course;
   }
 
   Future<int> _enrollCourse({

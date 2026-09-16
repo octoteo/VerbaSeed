@@ -103,6 +103,10 @@ final installedCoursesProvider = StreamProvider<List<InstalledCourse>>(
   (ref) => ref.watch(courseInstallationRepositoryProvider).watchInstalledCourses(),
 );
 
+final installedCourseAssetIdsProvider = StreamProvider<Set<String>>(
+  (ref) => ref.watch(courseInstallationRepositoryProvider).watchInstalledAssetIds(),
+);
+
 final installedCourseVersionsProvider =
     StreamProvider.family<List<InstalledCourseVersion>, String>(
   (ref, courseId) => ref

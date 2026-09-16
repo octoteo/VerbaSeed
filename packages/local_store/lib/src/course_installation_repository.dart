@@ -47,6 +47,11 @@ final class CourseInstallationRepository {
     return query.watch();
   }
 
+  Stream<Set<String>> watchInstalledAssetIds() =>
+      _db.select(_db.installedCourseVersions).watch().map(
+            (versions) => versions.map((version) => version.assetId).toSet(),
+          );
+
   Future<CourseInstallationResult> installCourse({
     required String courseId,
     required String title,
@@ -165,38 +170,72 @@ final class CourseInstallationRepository {
     });
   }
 
-  Future<InstalledCourseVersion> setCurrentVersion({
+  Future<InstalledCourseVersion?> installedVersion({
     required String courseId,
     required int version,
   }) async {
+    final normalizedCourseId = courseId.trim();
+    if (normalizedCourseId.isEmpty) {
+      throw const FormatException('courseId cannot be empty');
+    }
     if (version < 1) {
       throw RangeError.range(version, 1, null, 'version');
+    }
+    return (_db.select(_db.installedCourseVersions)
+          ..where(
+            (table) =>
+                table.courseId.equals(normalizedCourseId) &
+                table.version.equals(version),
+          ))
+        .getSingleOrNull();
+  }
+
+  Future<InstalledCourseVersion> setCurrentVersion({
+    required String courseId,
+    required int version,
+    String? title,
+  }) async {
+    final normalizedCourseId = courseId.trim();
+    final normalizedTitle = title?.trim();
+    if (normalizedCourseId.isEmpty) {
+      throw const FormatException('courseId cannot be empty');
+    }
+    if (version < 1) {
+      throw RangeError.range(version, 1, null, 'version');
+    }
+    if (normalizedTitle != null && normalizedTitle.isEmpty) {
+      throw const FormatException('课程名称不能为空');
     }
 
     return _db.transaction(() async {
       final course = await (_db.select(_db.installedCourses)
-            ..where((table) => table.id.equals(courseId)))
+            ..where((table) => table.id.equals(normalizedCourseId)))
           .getSingleOrNull();
       if (course == null) {
-        throw StateError('本地课程不存在: $courseId');
+        throw StateError('本地课程不存在: $normalizedCourseId');
       }
 
       final target = await (_db.select(_db.installedCourseVersions)
             ..where(
               (table) =>
-                  table.courseId.equals(courseId) & table.version.equals(version),
+                  table.courseId.equals(normalizedCourseId) &
+                  table.version.equals(version),
             ))
           .getSingleOrNull();
       if (target == null) {
-        throw StateError('课程版本不存在: $courseId@$version');
+        throw StateError('课程版本不存在: $normalizedCourseId@$version');
       }
 
       if (course.currentVersion != version ||
-          course.sourceJobId != target.sourceJobId) {
+          course.sourceJobId != target.sourceJobId ||
+          (normalizedTitle != null && course.title != normalizedTitle)) {
         await (_db.update(_db.installedCourses)
-              ..where((table) => table.id.equals(courseId)))
+              ..where((table) => table.id.equals(normalizedCourseId)))
             .write(
           InstalledCoursesCompanion(
+            title: normalizedTitle == null
+                ? const Value.absent()
+                : Value(normalizedTitle),
             currentVersion: Value(version),
             sourceJobId: Value(target.sourceJobId),
             updatedAt: Value(_now()),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:local_store/local_store.dart';
 
+import '../../data/document_import_coordinator.dart';
 import '../../data/providers.dart';
 
 class CurriculumPage extends ConsumerWidget {
@@ -13,6 +14,8 @@ class CurriculumPage extends ConsumerWidget {
     final courses = ref.watch(installedCoursesProvider);
     final importJobs = ref.watch(importJobsProvider);
     final importRepository = ref.watch(importRepositoryProvider);
+    final installedAssetIdsState = ref.watch(installedCourseAssetIdsProvider);
+    final installedAssetIds = installedAssetIdsState.asData?.value;
     final activeLearnerState = ref.watch(activeLearnerProvider);
     final activeLearner = activeLearnerState.asData?.value;
     final enrollmentState = activeLearner == null
@@ -23,21 +26,23 @@ class CurriculumPage extends ConsumerWidget {
           const <LearnerCourseEnrollment>[])
         enrollment.courseId: enrollment,
     };
-    final installedSourceJobIds = courses.asData?.value
-            .map((course) => course.sourceJobId)
-            .whereType<String>()
-            .toSet() ??
-        const <String>{};
-    final acceptedDraftJobs = importJobs.asData?.value.where((job) {
-          if (installedSourceJobIds.contains(job.id)) return false;
-          try {
-            final source = importRepository.decodeSource(job);
-            return source.metadata['courseDraftStatus'] == 'accepted';
-          } on Object {
-            return false;
-          }
-        }).toList(growable: false) ??
-        const <ImportJob>[];
+    final acceptedDraftJobs = installedAssetIds == null
+        ? const <ImportJob>[]
+        : importJobs.asData?.value.where((job) {
+              try {
+                final source = importRepository.decodeSource(job);
+                if (source.metadata['courseDraftStatus'] != 'accepted') {
+                  return false;
+                }
+                final rawAsset = source.metadata[
+                    DocumentImportCoordinator.courseDraftAssetMetadataKey];
+                final assetId = rawAsset is Map ? rawAsset['id'] as String? : null;
+                return assetId == null || !installedAssetIds.contains(assetId);
+              } on Object {
+                return false;
+              }
+            }).toList(growable: false) ??
+            const <ImportJob>[];
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -465,7 +470,7 @@ class _InstalledCourseCard extends ConsumerWidget {
                                     if (!selected) return;
                                     try {
                                       await ref
-                                          .read(courseInstallationRepositoryProvider)
+                                          .read(courseInstallationServiceProvider)
                                           .setCurrentVersion(
                                             courseId: course.id,
                                             version: version.version,
