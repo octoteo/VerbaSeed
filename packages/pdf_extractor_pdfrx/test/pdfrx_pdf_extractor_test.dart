@@ -1,11 +1,14 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:document_processing/document_processing.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pdf_extractor_pdfrx/pdf_extractor_pdfrx.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   const extractor = PdfrxPdfExtractor();
 
   test('advertises PDF MIME support only', () {
@@ -36,6 +39,23 @@ void main() {
   });
 
   test('extracts text and normalized layout from a real PDF', () async {
+    const pathProviderChannel = MethodChannel('plugins.flutter.io/path_provider');
+    final temporaryDirectory = await Directory.systemTemp.createTemp(
+      'verbaseed-pdfrx-test-',
+    );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      pathProviderChannel,
+      (_) async => temporaryDirectory.path,
+    );
+    addTearDown(() async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(pathProviderChannel, null);
+      if (await temporaryDirectory.exists()) {
+        await temporaryDirectory.delete(recursive: true);
+      }
+    });
+
     final document = await extractor.extract(
       DocumentExtractionRequest(
         assetId: 'asset-real-pdf',
