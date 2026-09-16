@@ -14,6 +14,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  dart-packages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - packages/course_schema
+          - packages/learning_engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Resolve dependencies
+        working-directory: ${{ matrix.package }}
+        run: dart pub get
+      - name: Analyze
+        working-directory: ${{ matrix.package }}
+        run: dart analyze --fatal-infos
+      - name: Test
+        working-directory: ${{ matrix.package }}
+        run: dart test
+
   flutter-web:
     runs-on: ubuntu-latest
     timeout-minutes: 20
