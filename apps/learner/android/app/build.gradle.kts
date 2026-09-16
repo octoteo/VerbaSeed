@@ -16,8 +16,7 @@ android {
 
     defaultConfig {
         applicationId = "io.github.octoteo.verbaseed"
-        // Current ML Kit Text Recognition v2 requires Android API 23+.
-        minSdk = 23
+        minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
