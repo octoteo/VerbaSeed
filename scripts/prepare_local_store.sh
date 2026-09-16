@@ -7,9 +7,13 @@ WEB_DIR="${ROOT_DIR}/apps/learner/web"
 
 pushd "${STORE_DIR}" >/dev/null
 flutter pub get
-dart run build_runner build --delete-conflicting-outputs
+dart run build_runner build
 
-SQLITE_VERSION="$(awk '/^  sqlite3:/{found=1} found && /version:/{gsub(/\"/, \"\", $2); print $2; exit}' pubspec.lock)"
+SQLITE_VERSION="$(awk '
+  /^  sqlite3:$/ { found=1; next }
+  found && /^    version:/ { gsub(/"/, "", $2); print $2; exit }
+  found && /^  [^ ]/ { exit }
+' pubspec.lock)"
 if [[ -z "${SQLITE_VERSION}" ]]; then
   echo "Unable to resolve sqlite3 package version" >&2
   exit 1
