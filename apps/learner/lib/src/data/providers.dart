@@ -96,3 +96,10 @@ final importJobsProvider = StreamProvider<List<ImportJob>>(
 final installedCoursesProvider = StreamProvider<List<InstalledCourse>>(
   (ref) => ref.watch(courseInstallationRepositoryProvider).watchInstalledCourses(),
 );
+
+final learnerCourseEnrollmentsProvider =
+    StreamProvider.family<List<LearnerCourseEnrollment>, String>(
+  (ref, learnerId) => ref
+      .watch(courseInstallationRepositoryProvider)
+      .watchEnrollments(learnerId),
+);
