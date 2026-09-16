@@ -14,7 +14,7 @@ final class GoogleMlKitTextExtractor implements DocumentExtractor {
   static bool get isSupportedPlatform => Platform.isAndroid || Platform.isIOS;
 
   @override
-  String get id => 'google-mlkit-text-latin';
+  String get id => 'google-mlkit-text-zh-latin';
 
   @override
   bool supportsMimeType(String mimeType) => _supportsImageMimeType(mimeType);
@@ -51,7 +51,10 @@ final class GoogleMlKitTextExtractor implements DocumentExtractor {
 
     try {
       await file.writeAsBytes(request.bytes, flush: true);
-      recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+      // The Chinese ML Kit model recognizes both Chinese and Latin text, which
+      // matches Chinese primary-school English material without running two
+      // recognizers and then trying to de-duplicate overlapping boxes.
+      recognizer = TextRecognizer(script: TextRecognitionScript.chinese);
       final recognized = await recognizer.processImage(
         InputImage.fromFilePath(file.path),
       );
@@ -89,7 +92,7 @@ final class GoogleMlKitTextExtractor implements DocumentExtractor {
           ),
         ],
         metadata: {
-          'script': 'latin',
+          'script': 'chinese+latin',
           'imageWidth': dimensions.width,
           'imageHeight': dimensions.height,
           'blockCount': blocks.length,
