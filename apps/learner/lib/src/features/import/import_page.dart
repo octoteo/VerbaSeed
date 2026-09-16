@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:content_source/content_source.dart';
 import 'package:content_store/content_store.dart';
+import 'package:document_processing/document_processing.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -45,13 +46,13 @@ class ImportPage extends ConsumerWidget {
             _SourceCard(
               icon: Icons.image_outlined,
               title: '图片 / OCR',
-              subtitle: '选择 JPG、PNG、WebP；本轮完成安全持久化，OCR 解析进入下一处理阶段',
+              subtitle: '选择 JPG、PNG、WebP；原图持久化后进入可恢复的文档解析队列',
               onTap: () => _pickImage(context, assetStore, repository),
             ),
             _SourceCard(
               icon: Icons.picture_as_pdf_outlined,
               title: 'PDF',
-              subtitle: '选择 PDF 并持久化原文件，随后由版面/OCR 管线解析',
+              subtitle: '选择 PDF 并持久化原文件，随后进入版面/OCR 解析状态机',
               onTap: () => _pickPdf(context, assetStore, repository),
             ),
             _SourceCard(
@@ -90,6 +91,7 @@ class ImportPage extends ConsumerWidget {
                             title: Text(job.displayName),
                             subtitle: Text(
                               '${job.sourceType} · ${_statusLabel(job.status)}'
+                              '${_documentProcessingLabel(repository.decodeSource(job))}'
                               '${job.errorMessage == null ? '' : '\n${job.errorMessage}'}',
                             ),
                             isThreeLine: job.errorMessage != null,
@@ -234,13 +236,19 @@ class ImportPage extends ConsumerWidget {
       fileName: fileName,
       mimeType: mimeType,
     );
+    final processingState = DocumentRetryStateMachine().initial(
+      at: DateTime.now().toUtc(),
+    );
     final source = ContentSource(
       type: sourceType,
       displayName: asset.fileName,
-      metadata: {
-        'asset': asset.toJson(),
-        'pipeline': 'pending-document-extraction',
-      },
+      metadata: withDocumentProcessingState(
+        {
+          'asset': asset.toJson(),
+          'pipeline': 'document-extraction-v1',
+        },
+        processingState,
+      ),
     );
     await repository.enqueue(source);
     if (context.mounted) {
@@ -396,6 +404,28 @@ class ImportPage extends ConsumerWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('$title：$error')),
     );
+  }
+
+  static String _documentProcessingLabel(ContentSource source) {
+    final raw = source.metadata[documentProcessingMetadataKey];
+    if (raw == null) return '';
+    try {
+      final state = documentProcessingStateFromMetadata(source.metadata)!;
+      final label = switch (state.phase) {
+        DocumentProcessingPhase.queued => '待处理',
+        DocumentProcessingPhase.extracting =>
+          '处理中（${state.attempt}/${state.maxAttempts}）',
+        DocumentProcessingPhase.retryScheduled =>
+          '等待重试（已尝试 ${state.attempt}/${state.maxAttempts}）',
+        DocumentProcessingPhase.succeeded => '已完成',
+        DocumentProcessingPhase.failed =>
+          '失败：${state.lastErrorMessage ?? state.lastErrorCode ?? '未知错误'}',
+        DocumentProcessingPhase.cancelled => '已取消',
+      };
+      return '\n文档解析：$label';
+    } on Object catch (error) {
+      return '\n文档解析：状态无效（$error）';
+    }
   }
 
   static String _statusLabel(String value) => switch (value) {

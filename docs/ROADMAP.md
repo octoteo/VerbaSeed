@@ -24,11 +24,13 @@ Completed foundation:
 - Camera capture plus image/PDF file selection
 - GitHub course manifest fetch pinned to resolved commit SHA
 - Plain-text Course Compiler draft path
+- Document extraction contracts for page ranges, normalized layout blocks and provider adapters
+- Persisted document-processing metadata with deterministic bounded retries and interrupted-run recovery
 
 Next v0.2 increments:
 
-- OCR/layout extraction provider and deterministic retry state machine
-- PDF text/layout extraction and page-range handling
+- Platform OCR/layout adapters for image imports, starting with a local/offline implementation
+- PDF text/layout extraction and page-range execution
 - Course installation tables separate from raw import jobs
 - GitHub update checks with user-controlled upgrades and rollback
 - Backup/export/import of learner data and course manifests

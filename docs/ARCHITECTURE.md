@@ -21,16 +21,21 @@ Application / feature coordinators
    |
 Domain contracts
    |-- course_schema
+   |-- content_source
+   |-- document_processing
    |-- learning_engine
    |-- learner_model (planned)
    |-- exercise_engine (planned)
    |
 Infrastructure adapters
    |-- local_store (SQLite / OPFS)
-   |-- content_source
+   |-- content_store (filesystem / IndexedDB)
+   |-- OCR / PDF extractors (platform adapters)
    |-- speech_runtime
    |-- ai_gateway
 ```
+
+`document_processing` owns provider-neutral extraction requests/results, page ranges, normalized layout blocks and the retry state machine. It does not select a concrete OCR/PDF engine. Processing timestamps are explicit inputs and retries use bounded deterministic backoff, so recovery decisions can be reproduced in tests and after an app restart.
 
 ## Reliability model
 
@@ -42,6 +47,9 @@ Planned persistence rules:
 - append-only review events where practical;
 - schema migrations are forward-only and tested against fixtures;
 - import jobs are staged and validated before replacing active course state;
+- original imported assets are content-addressed and integrity-checked outside SQLite;
+- document-processing state is stored with import metadata, including attempt count and retry eligibility;
+- interrupted extraction runs transition back through a bounded retry schedule instead of retrying forever;
 - remote content is cached with integrity hashes and provenance metadata;
 - AI output is never accepted as canonical course data without schema validation.
 
