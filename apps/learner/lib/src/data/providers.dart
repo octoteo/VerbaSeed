@@ -6,6 +6,7 @@ import 'package:ocr_google_mlkit/ocr_google_mlkit.dart';
 import 'package:pdf_extractor_pdfrx/pdf_extractor_pdfrx.dart';
 
 import 'course_draft_review_service.dart';
+import 'course_installation_service.dart';
 import 'document_import_coordinator.dart';
 
 final databaseProvider = Provider<VerbaSeedDatabase>((ref) {
@@ -50,6 +51,10 @@ final importRepositoryProvider = Provider<ImportRepository>(
   (ref) => ImportRepository(ref.watch(databaseProvider)),
 );
 
+final courseInstallationRepositoryProvider = Provider<CourseInstallationRepository>(
+  (ref) => CourseInstallationRepository(ref.watch(databaseProvider)),
+);
+
 final documentImportCoordinatorProvider = Provider<DocumentImportCoordinator>(
   (ref) => DocumentImportCoordinator(
     repository: ref.watch(importRepositoryProvider),
@@ -68,6 +73,15 @@ final courseDraftReviewServiceProvider = Provider<CourseDraftReviewService>(
   ),
 );
 
+final courseInstallationServiceProvider = Provider<CourseInstallationService>(
+  (ref) => CourseInstallationService(
+    reviewService: ref.watch(courseDraftReviewServiceProvider),
+    installationRepository: ref.watch(courseInstallationRepositoryProvider),
+    reviewRepository: ref.watch(reviewRepositoryProvider),
+    assetStore: ref.watch(contentAssetStoreProvider),
+  ),
+);
+
 final learnerProfilesProvider = StreamProvider<List<LearnerProfile>>(
   (ref) => ref.watch(learnerRepositoryProvider).watchProfiles(),
 );
@@ -78,4 +92,15 @@ final activeLearnerProvider = StreamProvider<LearnerProfile?>(
 
 final importJobsProvider = StreamProvider<List<ImportJob>>(
   (ref) => ref.watch(importRepositoryProvider).watchJobs(),
+);
+
+final installedCoursesProvider = StreamProvider<List<InstalledCourse>>(
+  (ref) => ref.watch(courseInstallationRepositoryProvider).watchInstalledCourses(),
+);
+
+final learnerCourseEnrollmentsProvider =
+    StreamProvider.family<List<LearnerCourseEnrollment>, String>(
+  (ref, learnerId) => ref
+      .watch(courseInstallationRepositoryProvider)
+      .watchEnrollments(learnerId),
 );

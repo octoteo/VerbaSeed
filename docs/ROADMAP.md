@@ -45,12 +45,17 @@ Completed foundation:
 - Removal of OCR false-positive learning items before a course can be accepted
 - Immutable reviewed course revisions written back to Content Store instead of mutating prior draft artifacts
 - Explicit human-accepted draft state that clears review flags without installing a course implicitly
+- Versioned installed-course tables separated from transient import jobs and accepted drafts
+- Immutable installed-course version history referencing content-addressed course artifacts
+- Per-learner course enrollment separate from device-wide course installation
+- Accepted-draft installation service that idempotently seeds FSRS review cards for the selected learner
+- Installed-course library UI with explicit pending-draft installation controls
+- Existing installed courses can be enrolled into additional learner profiles from the local library
 
 Next v0.2 increments:
 
 - Render text-layer-empty PDF pages and feed them through the same OCR provider
-- Course installation tables separate from raw import jobs and accepted drafts
-- Generate learner review cards only from installed course versions
+- Add installed-course version switching and rollback controls
 - GitHub update checks with user-controlled upgrades and rollback
 - Backup/export/import of learner data and course manifests
 - Production Android signing and release-distribution workflow
