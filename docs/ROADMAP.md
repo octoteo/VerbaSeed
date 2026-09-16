@@ -26,11 +26,14 @@ Completed foundation:
 - Plain-text Course Compiler draft path
 - Document extraction contracts for page ranges, normalized layout blocks and provider adapters
 - Persisted document-processing metadata with deterministic bounded retries and interrupted-run recovery
+- Local PDF text/layout extraction through a provider adapter
+- User-selectable PDF page ranges with bounds validation
+- Durable extracted-document artifacts stored in Content Store before import completion
+- Text-layer-empty PDF detection for explicit OCR fallback
 
 Next v0.2 increments:
 
-- Platform OCR/layout adapters for image imports, starting with a local/offline implementation
-- PDF text/layout extraction and page-range execution
+- Platform OCR/layout adapters for image imports and scanned PDFs, starting with a local/offline implementation
 - Course installation tables separate from raw import jobs
 - GitHub update checks with user-controlled upgrades and rollback
 - Backup/export/import of learner data and course manifests

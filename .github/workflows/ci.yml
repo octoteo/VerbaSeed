@@ -59,6 +59,32 @@ jobs:
         working-directory: packages/content_store
         run: flutter test
 
+  flutter-pdf-extractor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve dependencies
+        working-directory: packages/pdf_extractor_pdfrx
+        run: flutter pub get
+      - name: Prepare PDFium test runtime
+        run: |
+          mkdir -p "$RUNNER_TEMP/pdfium"
+          curl -fsSL "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F7811/pdfium-linux-x64.tgz" \
+            | tar -xz -C "$RUNNER_TEMP/pdfium"
+          test -f "$RUNNER_TEMP/pdfium/lib/libpdfium.so"
+          echo "PDFIUM_PATH=$RUNNER_TEMP/pdfium/lib/libpdfium.so" >> "$GITHUB_ENV"
+      - name: Analyze
+        working-directory: packages/pdf_extractor_pdfrx
+        run: flutter analyze --fatal-infos
+      - name: Test
+        working-directory: packages/pdf_extractor_pdfrx
+        run: flutter test
+
   flutter-local-store:
     runs-on: ubuntu-latest
     timeout-minutes: 15

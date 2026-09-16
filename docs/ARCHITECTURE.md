@@ -30,26 +30,32 @@ Domain contracts
 Infrastructure adapters
    |-- local_store (SQLite / OPFS)
    |-- content_store (filesystem / IndexedDB)
-   |-- OCR / PDF extractors (platform adapters)
+   |-- pdf_extractor_pdfrx (local PDF text/layout)
+   |-- OCR extractors (platform adapters, planned)
    |-- speech_runtime
    |-- ai_gateway
 ```
 
 `document_processing` owns provider-neutral extraction requests/results, page ranges, normalized layout blocks and the retry state machine. It does not select a concrete OCR/PDF engine. Processing timestamps are explicit inputs and retries use bounded deterministic backoff, so recovery decisions can be reproduced in tests and after an app restart.
 
+`pdf_extractor_pdfrx` is the first concrete document adapter. It extracts an existing PDF text layer and fragment geometry locally. The application coordinator persists the `extracting` state before invoking it, writes the normalized extraction result to the content-addressed Content Store, and marks the import successful only after that result is durable. PDFs without usable text are marked for the OCR fallback rather than being silently treated as successfully understood.
+
 ## Reliability model
 
 The application treats the local device as the source of truth for core learning data. Future cloud sync is replication, not ownership. Writes are durable locally before any optional remote synchronization is acknowledged.
 
-Planned persistence rules:
+Persistence rules:
 
-- SQLite transactions for learner progress, reviews and course metadata.
+- SQLite transactions for learner progress, reviews and course metadata;
 - append-only review events where practical;
 - schema migrations are forward-only and tested against fixtures;
 - import jobs are staged and validated before replacing active course state;
 - original imported assets are content-addressed and integrity-checked outside SQLite;
+- normalized extraction artifacts are stored outside SQLite and referenced by content-addressed metadata;
 - document-processing state is stored with import metadata, including attempt count and retry eligibility;
+- processing state is persisted before provider work so a crash cannot masquerade as success;
 - interrupted extraction runs transition back through a bounded retry schedule instead of retrying forever;
+- retryable and permanent provider failures remain distinct;
 - remote content is cached with integrity hashes and provenance metadata;
 - AI output is never accepted as canonical course data without schema validation.
 
