@@ -35,6 +35,10 @@ final pdfExtractorProvider = Provider<PdfrxPdfExtractor>(
   (ref) => const PdfrxPdfExtractor(),
 );
 
+final pdfPageRasterizerProvider = Provider<PdfrxPdfPageRasterizer>(
+  (ref) => const PdfrxPdfPageRasterizer(),
+);
+
 final imageOcrExtractorProvider = Provider<GoogleMlKitTextExtractor>(
   (ref) => const GoogleMlKitTextExtractor(),
 );
@@ -60,6 +64,7 @@ final documentImportCoordinatorProvider = Provider<DocumentImportCoordinator>(
     repository: ref.watch(importRepositoryProvider),
     assetStore: ref.watch(contentAssetStoreProvider),
     pdfExtractor: ref.watch(pdfExtractorProvider),
+    pdfPageRasterizer: ref.watch(pdfPageRasterizerProvider),
     imageExtractor: ref.watch(imageOcrExtractorProvider),
     imageExtractionAvailable: GoogleMlKitTextExtractor.isSupportedPlatform,
   ),

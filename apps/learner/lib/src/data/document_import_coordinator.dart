@@ -12,6 +12,7 @@ final class DocumentImportCoordinator {
     required ContentAssetStore assetStore,
     required DocumentExtractor pdfExtractor,
     DocumentExtractor? imageExtractor,
+    PdfPageRasterizer? pdfPageRasterizer,
     bool imageExtractionAvailable = false,
     DocumentRetryStateMachine? stateMachine,
     DateTime Function()? clock,
@@ -21,6 +22,7 @@ final class DocumentImportCoordinator {
         assetStore,
         pdfExtractor,
         imageExtractor: imageExtractor,
+        pdfPageRasterizer: pdfPageRasterizer,
         imageExtractionAvailable: imageExtractionAvailable,
         stateMachine: stateMachine,
         clock: clock,
@@ -31,6 +33,7 @@ final class DocumentImportCoordinator {
     this._assetStore,
     this._pdfExtractor, {
     DocumentExtractor? imageExtractor,
+    this._pdfPageRasterizer,
     required bool imageExtractionAvailable,
     DocumentRetryStateMachine? stateMachine,
     DateTime Function()? clock,
@@ -47,10 +50,14 @@ final class DocumentImportCoordinator {
   final ContentAssetStore _assetStore;
   final DocumentExtractor _pdfExtractor;
   final DocumentExtractor? _imageExtractor;
+  final PdfPageRasterizer? _pdfPageRasterizer;
   final bool imageExtractionAvailable;
   final DocumentRetryStateMachine _stateMachine;
   final DateTime Function() _clock;
   final Set<String> _inFlight = <String>{};
+
+  bool get pdfOcrFallbackAvailable =>
+      imageExtractionAvailable && _pdfPageRasterizer != null;
 
   Future<DocumentProcessingState> processPdf(
     ImportJob job, {
@@ -77,7 +84,6 @@ final class DocumentImportCoordinator {
       source: source,
       extractor: _pdfExtractor,
       pageRange: _pageRangeFromMetadata(source.metadata),
-      emptyTextMetadataKey: 'requiresOcr',
     );
   }
 
@@ -95,7 +101,6 @@ final class DocumentImportCoordinator {
       job: job,
       source: source,
       extractor: extractor,
-      emptyTextMetadataKey: 'ocrEmpty',
     );
   }
 
@@ -104,7 +109,6 @@ final class DocumentImportCoordinator {
     required ContentSource source,
     required DocumentExtractor extractor,
     PageRange? pageRange,
-    required String emptyTextMetadataKey,
   }) async {
     if (!_inFlight.add(job.id)) {
       throw StateError('文档解析任务正在执行: ${job.id}');
@@ -161,7 +165,7 @@ final class DocumentImportCoordinator {
           );
         }
 
-        final document = await extractor.extract(
+        var document = await extractor.extract(
           DocumentExtractionRequest(
             assetId: asset.id,
             mimeType: asset.mimeType,
@@ -178,6 +182,23 @@ final class DocumentImportCoordinator {
           );
         }
 
+        final textLayerEmptyPages = source.type == ContentSourceType.pdf
+            ? _emptyPageNumbers(document)
+            : const <int>[];
+        var pdfOcrFallbackUsed = false;
+        if (source.type == ContentSourceType.pdf &&
+            textLayerEmptyPages.isNotEmpty &&
+            pdfOcrFallbackAvailable) {
+          document = await _ocrEmptyPdfPages(
+            asset: asset,
+            pdfBytes: bytes,
+            textDocument: document,
+            pageRange: pageRange,
+            emptyPageNumbers: textLayerEmptyPages.toSet(),
+          );
+          pdfOcrFallbackUsed = true;
+        }
+
         final resultBytes = Uint8List.fromList(
           utf8.encode(jsonEncode(document.toJson())),
         );
@@ -188,6 +209,7 @@ final class DocumentImportCoordinator {
         );
 
         final emptyText = document.plainText.trim().isEmpty;
+        final unresolvedEmptyPages = _emptyPageNumbers(document);
         CourseDraftCompilation? compilation;
         ContentAsset? courseDraftAsset;
         String? compilationError;
@@ -214,13 +236,25 @@ final class DocumentImportCoordinator {
         final completed = _stateMachine.succeed(state, at: _now());
         final courseNeedsReview =
             compilation?.requiresReview ?? (compilationError != null);
+        final requiresReview =
+            unresolvedEmptyPages.isNotEmpty || courseNeedsReview;
         final metadata = <String, Object?>{
           ...resolvedSource.metadata,
           extractionAssetMetadataKey: resultAsset.toJson(),
-          'extractionProvider': extractor.id,
+          'extractionProvider': document.providerId,
           'extractedPageCount': document.pages.length,
           'extractedTextLength': document.plainText.length,
-          emptyTextMetadataKey: emptyText,
+          if (source.type == ContentSourceType.pdf) ...{
+            'textLayerEmptyPages': textLayerEmptyPages,
+            'requiresOcr':
+                textLayerEmptyPages.isNotEmpty && !pdfOcrFallbackUsed,
+            'pdfOcrFallbackUsed': pdfOcrFallbackUsed,
+            if (pdfOcrFallbackUsed)
+              'pdfOcrFallbackPages': textLayerEmptyPages,
+            if (pdfOcrFallbackUsed)
+              'ocrEmptyPageCount': unresolvedEmptyPages.length,
+          } else
+            'ocrEmpty': emptyText,
           'courseDraftStatus': emptyText
               ? 'skipped'
               : compilation != null
@@ -229,11 +263,13 @@ final class DocumentImportCoordinator {
           if (courseDraftAsset != null)
             courseDraftAssetMetadataKey: courseDraftAsset.toJson(),
           if (compilation != null) ...compilation.toMetadata(),
+          if (unresolvedEmptyPages.isNotEmpty && compilation != null)
+            'courseDraftWarnings': [
+              ...compilation.warnings,
+              '仍有 ${unresolvedEmptyPages.length} 页未识别到文字，建议人工复核。',
+            ],
           'courseDraftError': ?compilationError,
-          if (emptyTextMetadataKey == 'ocrEmpty')
-            'requiresReview': emptyText || courseNeedsReview
-          else if (courseNeedsReview)
-            'requiresReview': true,
+          'requiresReview': requiresReview,
         };
         resolvedSource = resolvedSource.copyWith(
           metadata: withDocumentProcessingState(metadata, completed),
@@ -284,6 +320,103 @@ final class DocumentImportCoordinator {
     } finally {
       _inFlight.remove(job.id);
     }
+  }
+
+  Future<ExtractedDocument> _ocrEmptyPdfPages({
+    required ContentAsset asset,
+    required Uint8List pdfBytes,
+    required ExtractedDocument textDocument,
+    required PageRange? pageRange,
+    required Set<int> emptyPageNumbers,
+  }) async {
+    final rasterizer = _pdfPageRasterizer;
+    final imageExtractor = _imageExtractor;
+    if (rasterizer == null || imageExtractor == null || !imageExtractionAvailable) {
+      return textDocument;
+    }
+
+    final pagesByNumber = <int, ExtractedPage>{
+      for (final page in textDocument.pages) page.pageNumber: page,
+    };
+    final resolvedEmptyPages = <int>{};
+
+    await for (final rasterized in rasterizer.rasterize(
+      PdfRasterizationRequest(
+        assetId: asset.id,
+        mimeType: asset.mimeType,
+        bytes: pdfBytes,
+        sourceName: asset.fileName,
+        pageRange: pageRange,
+      ),
+    )) {
+      if (rasterized.sourceAssetId != asset.id) {
+        throw const DocumentExtractionException(
+          code: 'pdf_raster_asset_identity_mismatch',
+          message: 'PDF 页面渲染结果与原始资产标识不一致',
+          retryable: false,
+        );
+      }
+      if (!emptyPageNumbers.contains(rasterized.pageNumber)) continue;
+      if (!imageExtractor.supportsMimeType(rasterized.mimeType)) {
+        throw DocumentExtractionException(
+          code: 'ocr_raster_mime_unsupported',
+          message: '本地 OCR 不支持渲染格式 ${rasterized.mimeType}',
+          retryable: false,
+        );
+      }
+
+      final pageAssetId = '${asset.id}-page-${rasterized.pageNumber}';
+      final recognized = await imageExtractor.extract(
+        DocumentExtractionRequest(
+          assetId: pageAssetId,
+          mimeType: rasterized.mimeType,
+          bytes: rasterized.bytes,
+          sourceName: '${asset.fileName}.page-${rasterized.pageNumber}.png',
+        ),
+      );
+      if (recognized.assetId != pageAssetId) {
+        throw const DocumentExtractionException(
+          code: 'ocr_page_asset_identity_mismatch',
+          message: 'OCR 页面结果与渲染页面标识不一致',
+          retryable: false,
+        );
+      }
+
+      pagesByNumber[rasterized.pageNumber] = ExtractedPage(
+        pageNumber: rasterized.pageNumber,
+        text: recognized.plainText,
+        blocks: recognized.pages.expand((page) => page.blocks),
+      );
+      resolvedEmptyPages.add(rasterized.pageNumber);
+    }
+
+    final missingPages = emptyPageNumbers.difference(resolvedEmptyPages);
+    if (missingPages.isNotEmpty) {
+      throw DocumentExtractionException(
+        code: 'pdf_raster_pages_missing',
+        message: 'PDF OCR 缺少渲染页：${missingPages.toList()..sort()}',
+        retryable: true,
+      );
+    }
+
+    final pages = pagesByNumber.values.toList(growable: false)
+      ..sort((left, right) => left.pageNumber.compareTo(right.pageNumber));
+    return ExtractedDocument(
+      assetId: asset.id,
+      mimeType: 'application/pdf',
+      providerId:
+          '${textDocument.providerId}+${rasterizer.id}+${imageExtractor.id}',
+      extractedAt: _now(),
+      pages: pages,
+      metadata: {
+        ...textDocument.metadata,
+        'textLayerProvider': textDocument.providerId,
+        'pdfRasterizer': rasterizer.id,
+        'ocrProvider': imageExtractor.id,
+        'ocrFallback': true,
+        'ocrFallbackPages': emptyPageNumbers.toList()..sort(),
+      },
+    );
   }
 
   Future<DocumentProcessingState> _persistFailure({
@@ -348,6 +481,11 @@ final class DocumentImportCoordinator {
         DocumentProcessingPhase.failed => ImportJobState.failed,
         DocumentProcessingPhase.cancelled => ImportJobState.cancelled,
       };
+
+  static List<int> _emptyPageNumbers(ExtractedDocument document) => [
+        for (final page in document.pages)
+          if (page.text.trim().isEmpty) page.pageNumber,
+      ];
 
   static String _courseIdForAsset(ContentAsset asset) {
     final normalized = asset.id

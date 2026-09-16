@@ -35,6 +35,12 @@ android {
     }
 }
 
+dependencies {
+    // Bundled on-device model: recognizes both Chinese and Latin text without
+    // Google Play model downloads or a network OCR service.
+    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
+}
+
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17

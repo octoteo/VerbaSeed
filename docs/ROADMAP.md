@@ -32,7 +32,8 @@ Completed foundation:
 - Text-layer-empty PDF detection for explicit OCR fallback
 - Native Android host scaffold with stable application namespace and camera capability declarations
 - CI release-APK build gate with downloadable Android artifact
-- Offline Google ML Kit text-recognition adapter for image and camera assets on Android/iOS
+- Offline Google ML Kit text-recognition adapter for image and camera assets on Android
+- Bundled Chinese + Latin on-device OCR model for bilingual textbook pages
 - Normalized OCR layout blocks with durable extraction artifacts and explicit empty-result review metadata
 - Conditional Web stub that keeps unsupported OCR explicit instead of silently using a network service
 - Image/camera imports automatically enter the local OCR runner only after the original asset is durable
@@ -51,10 +52,13 @@ Completed foundation:
 - Accepted-draft installation service that idempotently seeds FSRS review cards for the selected learner
 - Installed-course library UI with explicit pending-draft installation controls
 - Existing installed courses can be enrolled into additional learner profiles from the local library
+- Streaming PDF page rasterization with bounded dimensions and one-page-at-a-time memory use
+- Mixed/scanned PDF fallback that OCRs only pages whose PDF text layer is empty
+- Scanned-page OCR results merge back into original PDF page numbers before course compilation
+- Web keeps scanned-PDF OCR unsupported explicitly; no hidden cloud OCR fallback
 
 Next v0.2 increments:
 
-- Render text-layer-empty PDF pages and feed them through the same OCR provider
 - Add installed-course version switching and rollback controls
 - GitHub update checks with user-controlled upgrades and rollback
 - Backup/export/import of learner data and course manifests

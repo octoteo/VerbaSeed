@@ -6,7 +6,7 @@ final class GoogleMlKitTextExtractor implements DocumentExtractor {
   static bool get isSupportedPlatform => false;
 
   @override
-  String get id => 'google-mlkit-text-latin';
+  String get id => 'google-mlkit-text-zh-latin';
 
   @override
   bool supportsMimeType(String mimeType) => _supportsImageMimeType(mimeType);
@@ -15,7 +15,7 @@ final class GoogleMlKitTextExtractor implements DocumentExtractor {
   Future<ExtractedDocument> extract(DocumentExtractionRequest request) {
     throw const DocumentExtractionException(
       code: 'ocr_unsupported_platform',
-      message: 'Google ML Kit OCR 当前仅支持 Android/iOS 原生运行时',
+      message: '当前 VerbaSeed 构建仅在 Android 配置本地中英 OCR；不会自动切换到云端服务',
       retryable: false,
     );
   }
