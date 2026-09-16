@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_store/local_store.dart';
 
-import '../../data/document_import_coordinator.dart';
 import '../../data/providers.dart';
 import 'import_page.dart';
 
