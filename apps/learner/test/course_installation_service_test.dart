@@ -138,7 +138,13 @@ void main() {
             Lesson(
               id: 'lesson',
               title: 'Lesson',
-              items: const [LearningItem(id: 'item', text: 'Hello')],
+              items: const [
+                LearningItem(
+                  id: 'item',
+                  text: 'Hello',
+                  translation: '',
+                ),
+              ],
             ),
           ],
         ),
