@@ -229,7 +229,7 @@ final class DocumentImportCoordinator {
           if (courseDraftAsset != null)
             courseDraftAssetMetadataKey: courseDraftAsset.toJson(),
           if (compilation != null) ...compilation.toMetadata(),
-          if (compilationError != null) 'courseDraftError': compilationError,
+          'courseDraftError': ?compilationError,
           if (emptyTextMetadataKey == 'ocrEmpty')
             'requiresReview': emptyText || courseNeedsReview
           else if (courseNeedsReview)
