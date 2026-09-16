@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:content_store/content_store.dart';
+import 'package:course_schema/course_schema.dart';
 import 'package:local_store/local_store.dart';
 
 import 'course_draft_review_service.dart';
@@ -18,27 +22,45 @@ final class CourseInstallationSummary {
   final bool reusedVersion;
 }
 
+final class CourseEnrollmentSummary {
+  const CourseEnrollmentSummary({
+    required this.courseId,
+    required this.version,
+    required this.itemCount,
+    required this.seededReviewCardCount,
+  });
+
+  final String courseId;
+  final int version;
+  final int itemCount;
+  final int seededReviewCardCount;
+}
+
 final class CourseInstallationService {
   factory CourseInstallationService({
     required CourseDraftReviewService reviewService,
     required CourseInstallationRepository installationRepository,
     required ReviewRepository reviewRepository,
+    required ContentAssetStore assetStore,
   }) =>
       CourseInstallationService._(
         reviewService,
         installationRepository,
         reviewRepository,
+        assetStore,
       );
 
   const CourseInstallationService._(
     this._reviewService,
     this._installationRepository,
     this._reviewRepository,
+    this._assetStore,
   );
 
   final CourseDraftReviewService _reviewService;
   final CourseInstallationRepository _installationRepository;
   final ReviewRepository _reviewRepository;
+  final ContentAssetStore _assetStore;
 
   Future<CourseInstallationSummary> installAcceptedDraft({
     required String jobId,
@@ -64,18 +86,11 @@ final class CourseInstallationService {
       itemCount: items.length,
       lessonCount: lessons.length,
     );
-    await _installationRepository.enrollLearner(
+    await _enrollCourse(
       learnerId: learnerId,
-      courseId: installation.courseId,
+      course: course,
       version: installation.version,
     );
-
-    for (final item in items) {
-      await _reviewRepository.loadOrCreate(
-        learnerId: learnerId,
-        itemId: item.id,
-      );
-    }
 
     return CourseInstallationSummary(
       courseId: installation.courseId,
@@ -84,5 +99,65 @@ final class CourseInstallationService {
       seededReviewCardCount: items.length,
       reusedVersion: installation.reused,
     );
+  }
+
+  Future<CourseEnrollmentSummary> enrollInstalledCourse({
+    required String courseId,
+    required String learnerId,
+  }) async {
+    final installedVersion =
+        await _installationRepository.currentVersion(courseId);
+    if (installedVersion == null) {
+      throw StateError('本地课程不存在: $courseId');
+    }
+
+    final bytes = await _assetStore.read(installedVersion.assetId);
+    if (bytes == null) {
+      throw StateError('课程内容资产已不存在，请重新导入课程');
+    }
+    final decoded = jsonDecode(utf8.decode(bytes));
+    if (decoded is! Map) {
+      throw const FormatException('已安装课程不是有效的 JSON 对象');
+    }
+    final course = Course.fromJson(Map<String, Object?>.from(decoded));
+    final itemCount = await _enrollCourse(
+      learnerId: learnerId,
+      course: course,
+      version: installedVersion.version,
+    );
+
+    return CourseEnrollmentSummary(
+      courseId: courseId,
+      version: installedVersion.version,
+      itemCount: itemCount,
+      seededReviewCardCount: itemCount,
+    );
+  }
+
+  Future<int> _enrollCourse({
+    required String learnerId,
+    required Course course,
+    required int version,
+  }) async {
+    final items = course.units
+        .expand((unit) => unit.lessons)
+        .expand((lesson) => lesson.items)
+        .toList(growable: false);
+    if (items.isEmpty) {
+      throw StateError('课程没有可加入学习计划的学习项');
+    }
+
+    await _installationRepository.enrollLearner(
+      learnerId: learnerId,
+      courseId: course.id,
+      version: version,
+    );
+    for (final item in items) {
+      await _reviewRepository.loadOrCreate(
+        learnerId: learnerId,
+        itemId: item.id,
+      );
+    }
+    return items.length;
   }
 }
