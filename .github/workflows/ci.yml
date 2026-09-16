@@ -39,6 +39,25 @@ jobs:
         working-directory: ${{ matrix.package }}
         run: dart test
 
+  flutter-content-store:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve dependencies
+        working-directory: packages/content_store
+        run: flutter pub get
+      - name: Analyze
+        working-directory: packages/content_store
+        run: flutter analyze --fatal-infos
+      - name: Test
+        working-directory: packages/content_store
+        run: flutter test
+
   flutter-local-store:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -53,7 +72,7 @@ jobs:
         run: flutter pub get
       - name: Generate Drift code
         working-directory: packages/local_store
-        run: dart run build_runner build --delete-conflicting-outputs
+        run: dart run build_runner build
       - name: Analyze local store
         working-directory: packages/local_store
         run: flutter analyze --fatal-infos

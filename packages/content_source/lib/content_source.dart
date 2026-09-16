@@ -1,10 +1,14 @@
 library content_source;
 
+export 'src/github_course_client.dart';
+
 import 'package:course_schema/course_schema.dart';
 
 enum ContentSourceType {
   cameraImage,
+  image,
   pdf,
+  file,
   github,
   web,
   subtitle,
@@ -25,6 +29,19 @@ final class ContentSource {
   final String displayName;
   final Uri? uri;
   final Map<String, Object?> metadata;
+
+  ContentSource copyWith({
+    ContentSourceType? type,
+    String? displayName,
+    Uri? uri,
+    Map<String, Object?>? metadata,
+  }) =>
+      ContentSource(
+        type: type ?? this.type,
+        displayName: displayName ?? this.displayName,
+        uri: uri ?? this.uri,
+        metadata: metadata ?? this.metadata,
+      );
 
   Map<String, Object?> toJson() => {
         'type': type.name,
@@ -92,8 +109,8 @@ final class GitHubCourseSource {
     );
   }
 
-  Uri manifestUri({String manifestName = 'course.json'}) {
-    final parts = <String>[owner, repository, ref];
+  Uri manifestUri({String manifestName = 'course.json', String? resolvedRef}) {
+    final parts = <String>[owner, repository, resolvedRef ?? ref];
     if (subpath.isNotEmpty) {
       parts.addAll(subpath.split('/'));
     }

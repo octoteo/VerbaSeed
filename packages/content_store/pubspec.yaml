@@ -1,0 +1,19 @@
+name: content_store
+description: Content-addressed local asset storage for VerbaSeed imports.
+publish_to: none
+version: 0.2.0
+
+environment:
+  sdk: '>=3.12.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  crypto: ^3.0.7
+  idb_shim: ^2.9.9
+  path: ^1.9.1
+  path_provider: ^2.1.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter

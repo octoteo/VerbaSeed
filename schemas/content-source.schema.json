@@ -7,7 +7,7 @@
   "properties": {
     "type": {
       "type": "string",
-      "enum": ["cameraImage", "pdf", "github", "web", "subtitle", "plainText"]
+      "enum": ["cameraImage", "image", "pdf", "file", "github", "web", "subtitle", "plainText"]
     },
     "displayName": { "type": "string", "minLength": 1 },
     "uri": { "type": ["string", "null"], "format": "uri" },

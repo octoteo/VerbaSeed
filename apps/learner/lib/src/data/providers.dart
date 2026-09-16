@@ -1,3 +1,5 @@
+import 'package:content_source/content_source.dart';
+import 'package:content_store/content_store.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_store/local_store.dart';
 
@@ -7,6 +9,20 @@ final databaseProvider = Provider<VerbaSeedDatabase>((ref) {
     database.close();
   });
   return database;
+});
+
+final contentAssetStoreProvider = Provider<ContentAssetStore>((ref) {
+  final store = openContentAssetStore();
+  ref.onDispose(() {
+    store.close();
+  });
+  return store;
+});
+
+final githubCourseClientProvider = Provider<GitHubCourseClient>((ref) {
+  final client = GitHubCourseClient();
+  ref.onDispose(client.close);
+  return client;
 });
 
 final learnerRepositoryProvider = Provider<LearnerRepository>(
