@@ -19,7 +19,7 @@ Build VerbaSeed as a reliable local-first learning platform. Prefer durable cont
 
 Every production change should include the smallest relevant automated test. `flutter analyze --fatal-infos`, `flutter test`, and the web release build must pass before merge; warnings such as stale imports are release failures.
 
-Widget tests using Drift/Riverpod streams must fully dispose providers/databases and flush async cleanup. Drive expandable/stateful UI into the asserted state before checking hidden children; pending timers or lifecycle leaks are test failures, not ignorable CI noise.
+Widget tests using Drift/Riverpod streams must fully dispose providers/databases and flush async cleanup. Prefer provider overrides/fakes when the persistence stream itself is not under test; drive expandable/stateful UI into the asserted state before checking hidden children. Pending timers or lifecycle leaks are test failures, not ignorable CI noise.
 
 Avoid unbounded retries, silent exception swallowing, hidden global mutable state, and feature code that writes directly to platform storage.
 
@@ -40,3 +40,7 @@ Prefer mature, actively maintained dependencies with compatible licenses. New de
 Use small PRs with clear acceptance criteria. Keep public schemas and architectural decisions documented alongside code.
 
 Vercel is a release gate, not the inner development loop. Keep docs-only changes skippable, avoid duplicate full Flutter builds for superseded commits, and batch coherent edits before pushing. When deployments queue, validate the newest commit SHA rather than waiting on stale previews. Merge only after the latest commit's required CI and relevant deployment checks pass.
+
+Web releases are build-once/promote-unchanged: GitHub Actions creates and tests `.vercel/output`; the deployment stage must upload that exact artifact and must not rerun Flutter, Drift codegen, analysis, or tests.
+
+Vercel Git auto-deployments stay disabled. Preview and production releases must originate from the GitHub Actions quality gate and use `vercel deploy --prebuilt` on the tested artifact.
