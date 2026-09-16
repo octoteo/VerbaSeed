@@ -7,16 +7,28 @@ import 'package:document_processing/document_processing.dart';
 import 'package:local_store/local_store.dart';
 
 final class DocumentImportCoordinator {
-  DocumentImportCoordinator({
+  factory DocumentImportCoordinator({
     required ImportRepository repository,
     required ContentAssetStore assetStore,
     required DocumentExtractor pdfExtractor,
     DocumentRetryStateMachine? stateMachine,
     DateTime Function()? clock,
-  })  : _repository = repository,
-        _assetStore = assetStore,
-        _pdfExtractor = pdfExtractor,
-        _stateMachine = stateMachine ?? DocumentRetryStateMachine(),
+  }) =>
+      DocumentImportCoordinator._(
+        repository,
+        assetStore,
+        pdfExtractor,
+        stateMachine: stateMachine,
+        clock: clock,
+      );
+
+  DocumentImportCoordinator._(
+    this._repository,
+    this._assetStore,
+    this._pdfExtractor, {
+    DocumentRetryStateMachine? stateMachine,
+    DateTime Function()? clock,
+  })  : _stateMachine = stateMachine ?? DocumentRetryStateMachine(),
         _clock = clock ?? DateTime.now;
 
   static const extractionAssetMetadataKey = 'extractionAsset';
@@ -129,7 +141,7 @@ final class DocumentImportCoordinator {
         );
         return completed;
       } on DocumentExtractionException catch (error) {
-        return _persistFailure(
+        return await _persistFailure(
           jobId: job.id,
           source: source,
           running: state,
@@ -138,7 +150,7 @@ final class DocumentImportCoordinator {
           retryable: error.retryable,
         );
       } on FormatException catch (error) {
-        return _persistFailure(
+        return await _persistFailure(
           jobId: job.id,
           source: source,
           running: state,
@@ -147,7 +159,7 @@ final class DocumentImportCoordinator {
           retryable: false,
         );
       } on StateError catch (error) {
-        return _persistFailure(
+        return await _persistFailure(
           jobId: job.id,
           source: source,
           running: state,
@@ -156,7 +168,7 @@ final class DocumentImportCoordinator {
           retryable: false,
         );
       } on Object catch (error) {
-        return _persistFailure(
+        return await _persistFailure(
           jobId: job.id,
           source: source,
           running: state,
