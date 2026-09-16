@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:document_processing/document_processing.dart';
 import 'package:flutter/services.dart';
