@@ -244,6 +244,29 @@ final class ImportRepository {
     return id;
   }
 
+  Future<void> replaceSource(
+    String id,
+    ContentSource source, {
+    ImportJobState? state,
+    String? errorMessage,
+  }) async {
+    final affected = await (_db.update(_db.importJobs)
+          ..where((table) => table.id.equals(id)))
+        .write(
+      ImportJobsCompanion(
+        sourceType: Value(source.type.name),
+        displayName: Value(source.displayName),
+        sourceJson: Value(jsonEncode(source.toJson())),
+        status: state == null ? const Value.absent() : Value(state.name),
+        errorMessage: Value(errorMessage),
+        updatedAt: Value(DateTime.now().toUtc()),
+      ),
+    );
+    if (affected != 1) {
+      throw StateError('导入任务不存在: $id');
+    }
+  }
+
   Future<void> updateStatus(
     String id,
     ImportJobState state, {
