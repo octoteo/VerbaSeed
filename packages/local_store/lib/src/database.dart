@@ -34,9 +34,9 @@ class ReviewCards extends Table {
   Set<Column<Object>> get primaryKey => {id};
 
   @override
-  Set<Set<Column<Object>>> get uniqueKeys => {
+  List<Set<Column<Object>>> get uniqueKeys => [
         {learnerId, itemId},
-      };
+      ];
 }
 
 class ReviewEvents extends Table {
