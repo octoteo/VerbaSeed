@@ -40,6 +40,18 @@ final class CourseInstallationRepository {
     return query.watch();
   }
 
+  Stream<List<InstalledCourseVersion>> watchVersions(String courseId) {
+    final query = _db.select(_db.installedCourseVersions)
+      ..where((table) => table.courseId.equals(courseId))
+      ..orderBy([(table) => OrderingTerm.desc(table.version)]);
+    return query.watch();
+  }
+
+  Stream<Set<String>> watchInstalledAssetIds() =>
+      _db.select(_db.installedCourseVersions).watch().map(
+            (versions) => versions.map((version) => version.assetId).toSet(),
+          );
+
   Future<CourseInstallationResult> installCourse({
     required String courseId,
     required String title,
@@ -70,20 +82,24 @@ final class CourseInstallationRepository {
           .getSingleOrNull();
 
       if (current != null) {
-        final existingVersion = await (_db.select(_db.installedCourseVersions)
+        final matchingVersion = await (_db.select(_db.installedCourseVersions)
               ..where(
                 (table) =>
                     table.courseId.equals(normalizedCourseId) &
-                    table.version.equals(current.currentVersion),
-              ))
+                    table.assetId.equals(normalizedAssetId),
+              )
+              ..limit(1))
             .getSingleOrNull();
-        if (existingVersion?.assetId == normalizedAssetId) {
-          if (current.title != normalizedTitle || current.sourceJobId != sourceJobId) {
+        if (matchingVersion != null) {
+          if (current.currentVersion != matchingVersion.version ||
+              current.title != normalizedTitle ||
+              current.sourceJobId != sourceJobId) {
             await (_db.update(_db.installedCourses)
                   ..where((table) => table.id.equals(normalizedCourseId)))
                 .write(
               InstalledCoursesCompanion(
                 title: Value(normalizedTitle),
+                currentVersion: Value(matchingVersion.version),
                 sourceJobId: Value(sourceJobId),
                 updatedAt: Value(_now()),
               ),
@@ -91,16 +107,21 @@ final class CourseInstallationRepository {
           }
           return CourseInstallationResult(
             courseId: normalizedCourseId,
-            version: existingVersion!.version,
-            versionId: existingVersion.id,
-            assetId: existingVersion.assetId,
+            version: matchingVersion.version,
+            versionId: matchingVersion.id,
+            assetId: matchingVersion.assetId,
             reused: true,
           );
         }
       }
 
       final now = _now();
-      final nextVersion = (current?.currentVersion ?? 0) + 1;
+      final latestInstalledVersion = await (_db.select(_db.installedCourseVersions)
+            ..where((table) => table.courseId.equals(normalizedCourseId))
+            ..orderBy([(table) => OrderingTerm.desc(table.version)])
+            ..limit(1))
+          .getSingleOrNull();
+      final nextVersion = (latestInstalledVersion?.version ?? 0) + 1;
       if (current == null) {
         await _db.into(_db.installedCourses).insert(
               InstalledCoursesCompanion.insert(
@@ -146,6 +167,82 @@ final class CourseInstallationRepository {
         assetId: normalizedAssetId,
         reused: false,
       );
+    });
+  }
+
+  Future<InstalledCourseVersion?> installedVersion({
+    required String courseId,
+    required int version,
+  }) async {
+    final normalizedCourseId = courseId.trim();
+    if (normalizedCourseId.isEmpty) {
+      throw const FormatException('courseId cannot be empty');
+    }
+    if (version < 1) {
+      throw RangeError.range(version, 1, null, 'version');
+    }
+    return (_db.select(_db.installedCourseVersions)
+          ..where(
+            (table) =>
+                table.courseId.equals(normalizedCourseId) &
+                table.version.equals(version),
+          ))
+        .getSingleOrNull();
+  }
+
+  Future<InstalledCourseVersion> setCurrentVersion({
+    required String courseId,
+    required int version,
+    String? title,
+  }) async {
+    final normalizedCourseId = courseId.trim();
+    final normalizedTitle = title?.trim();
+    if (normalizedCourseId.isEmpty) {
+      throw const FormatException('courseId cannot be empty');
+    }
+    if (version < 1) {
+      throw RangeError.range(version, 1, null, 'version');
+    }
+    if (normalizedTitle != null && normalizedTitle.isEmpty) {
+      throw const FormatException('课程名称不能为空');
+    }
+
+    return _db.transaction(() async {
+      final course = await (_db.select(_db.installedCourses)
+            ..where((table) => table.id.equals(normalizedCourseId)))
+          .getSingleOrNull();
+      if (course == null) {
+        throw StateError('本地课程不存在: $normalizedCourseId');
+      }
+
+      final target = await (_db.select(_db.installedCourseVersions)
+            ..where(
+              (table) =>
+                  table.courseId.equals(normalizedCourseId) &
+                  table.version.equals(version),
+            ))
+          .getSingleOrNull();
+      if (target == null) {
+        throw StateError('课程版本不存在: $normalizedCourseId@$version');
+      }
+
+      if (course.currentVersion != version ||
+          course.sourceJobId != target.sourceJobId ||
+          (normalizedTitle != null && course.title != normalizedTitle)) {
+        await (_db.update(_db.installedCourses)
+              ..where((table) => table.id.equals(normalizedCourseId)))
+            .write(
+          InstalledCoursesCompanion(
+            title: normalizedTitle == null
+                ? const Value.absent()
+                : Value(normalizedTitle),
+            currentVersion: Value(version),
+            sourceJobId: Value(target.sourceJobId),
+            updatedAt: Value(_now()),
+          ),
+        );
+      }
+      return target;
     });
   }
 

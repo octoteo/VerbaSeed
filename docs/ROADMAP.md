@@ -56,10 +56,13 @@ Completed foundation:
 - Mixed/scanned PDF fallback that OCRs only pages whose PDF text layer is empty
 - Scanned-page OCR results merge back into original PDF page numbers before course compilation
 - Web keeps scanned-PDF OCR unsupported explicitly; no hidden cloud OCR fallback
+- Installed-course version history is visible in the local course library
+- Device default course version can be switched or rolled back without mutating immutable course assets
+- Existing learner enrollments remain pinned to their current version when the device default changes
+- New installations use monotonic version numbers even after the default is rolled back
 
 Next v0.2 increments:
 
-- Add installed-course version switching and rollback controls
 - GitHub update checks with user-controlled upgrades and rollback
 - Backup/export/import of learner data and course manifests
 - Production Android signing and release-distribution workflow
