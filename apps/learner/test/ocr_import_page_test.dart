@@ -2,6 +2,7 @@ import 'package:content_source/content_source.dart';
 import 'package:content_store/content_store.dart';
 import 'package:document_processing/document_processing.dart';
 import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_store/local_store.dart';
@@ -55,5 +56,12 @@ void main() {
 
     expect(find.text('lesson-page.png'), findsWidgets);
     expect(find.text('等待 OCR'), findsOneWidget);
+
+    // Disposing a Drift query stream schedules a zero-duration close timer.
+    // Unmount the ProviderScope explicitly and advance the fake clock once so
+    // the test binding does not mistake normal asynchronous disposal for a
+    // leaked timer.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 }
