@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  flutter-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Resolve dependencies
+        working-directory: apps/learner
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: apps/learner
+        run: flutter analyze --fatal-infos
+
+      - name: Test
+        working-directory: apps/learner
+        run: flutter test
+
+      - name: Build web
+        working-directory: apps/learner
+        run: flutter build web --release
+
+      - name: Upload web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: verbaseed-web
+          path: apps/learner/build/web
+          if-no-files-found: error
+          retention-days: 14
