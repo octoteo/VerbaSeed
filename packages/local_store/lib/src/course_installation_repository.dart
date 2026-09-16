@@ -77,20 +77,24 @@ final class CourseInstallationRepository {
           .getSingleOrNull();
 
       if (current != null) {
-        final existingVersion = await (_db.select(_db.installedCourseVersions)
+        final matchingVersion = await (_db.select(_db.installedCourseVersions)
               ..where(
                 (table) =>
                     table.courseId.equals(normalizedCourseId) &
-                    table.version.equals(current.currentVersion),
-              ))
+                    table.assetId.equals(normalizedAssetId),
+              )
+              ..limit(1))
             .getSingleOrNull();
-        if (existingVersion?.assetId == normalizedAssetId) {
-          if (current.title != normalizedTitle || current.sourceJobId != sourceJobId) {
+        if (matchingVersion != null) {
+          if (current.currentVersion != matchingVersion.version ||
+              current.title != normalizedTitle ||
+              current.sourceJobId != sourceJobId) {
             await (_db.update(_db.installedCourses)
                   ..where((table) => table.id.equals(normalizedCourseId)))
                 .write(
               InstalledCoursesCompanion(
                 title: Value(normalizedTitle),
+                currentVersion: Value(matchingVersion.version),
                 sourceJobId: Value(sourceJobId),
                 updatedAt: Value(_now()),
               ),
@@ -98,9 +102,9 @@ final class CourseInstallationRepository {
           }
           return CourseInstallationResult(
             courseId: normalizedCourseId,
-            version: existingVersion!.version,
-            versionId: existingVersion.id,
-            assetId: existingVersion.assetId,
+            version: matchingVersion.version,
+            versionId: matchingVersion.id,
+            assetId: matchingVersion.assetId,
             reused: true,
           );
         }
