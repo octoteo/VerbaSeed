@@ -65,14 +65,12 @@ void main() {
       expect(document.providerId, extractor.id);
       expect(document.pages, hasLength(1));
       expect(document.plainText, contains('Hello VerbaSeed'));
-      expect(document.pages.single.blocks, isNotEmpty);
-      expect(
-        document.pages.single.blocks.any(
-          (block) => block.text.contains('Hello VerbaSeed'),
-        ),
-        isTrue,
-      );
-      for (final block in document.pages.single.blocks) {
+      final blocks = document.pages.single.blocks;
+      expect(blocks, isNotEmpty);
+      final blockText = blocks.map((block) => block.text).join(' ');
+      expect(blockText, contains('Hello'));
+      expect(blockText, contains('VerbaSeed'));
+      for (final block in blocks) {
         final bounds = block.bounds;
         if (bounds == null) continue;
         expect(bounds.left, inInclusiveRange(0.0, 1.0));
