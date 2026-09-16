@@ -1,6 +1,7 @@
 import 'package:content_source/content_source.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local_store/local_store.dart';
 
 import '../../data/providers.dart';
 
