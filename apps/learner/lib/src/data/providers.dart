@@ -5,6 +5,7 @@ import 'package:local_store/local_store.dart';
 import 'package:ocr_google_mlkit/ocr_google_mlkit.dart';
 import 'package:pdf_extractor_pdfrx/pdf_extractor_pdfrx.dart';
 
+import 'course_draft_review_service.dart';
 import 'document_import_coordinator.dart';
 
 final databaseProvider = Provider<VerbaSeedDatabase>((ref) {
@@ -56,6 +57,14 @@ final documentImportCoordinatorProvider = Provider<DocumentImportCoordinator>(
     pdfExtractor: ref.watch(pdfExtractorProvider),
     imageExtractor: ref.watch(imageOcrExtractorProvider),
     imageExtractionAvailable: GoogleMlKitTextExtractor.isSupportedPlatform,
+  ),
+);
+
+final courseDraftReviewServiceProvider = Provider<CourseDraftReviewService>(
+  (ref) => CourseDraftReviewService(
+    database: ref.watch(databaseProvider),
+    repository: ref.watch(importRepositoryProvider),
+    assetStore: ref.watch(contentAssetStoreProvider),
   ),
 );
 
