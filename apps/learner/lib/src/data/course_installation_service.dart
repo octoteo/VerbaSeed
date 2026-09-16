@@ -120,6 +120,9 @@ final class CourseInstallationService {
       throw const FormatException('已安装课程不是有效的 JSON 对象');
     }
     final course = Course.fromJson(Map<String, Object?>.from(decoded));
+    if (course.id != courseId) {
+      throw StateError('课程内容资产与安装记录不一致: ${course.id} != $courseId');
+    }
     final itemCount = await _enrollCourse(
       learnerId: learnerId,
       course: course,
