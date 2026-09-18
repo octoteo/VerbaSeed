@@ -128,13 +128,45 @@ jobs:
 
   flutter-android:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
+      - name: Test Android release packaging tooling
+        working-directory: scripts
+        run: python3 -m unittest -v test_package_android_release.py
+      - name: Generate ephemeral CI release signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          keystore="$RUNNER_TEMP/verbaseed-ci-release.jks"
+          keytool -genkeypair \
+            -keystore "$keystore" \
+            -storetype JKS \
+            -storepass verbaseed-ci-password \
+            -alias verbaseed-ci \
+            -keypass verbaseed-ci-password \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 2 \
+            -dname "CN=VerbaSeed CI,O=VerbaSeed,C=US"
+          cert=$(keytool -exportcert \
+            -alias verbaseed-ci \
+            -keystore "$keystore" \
+            -storepass verbaseed-ci-password \
+            -rfc \
+            | openssl x509 -outform der \
+            | sha256sum \
+            | awk '{print $1}')
+          echo "VERBASEED_ANDROID_KEYSTORE_PATH=$keystore" >> "$GITHUB_ENV"
+          echo "VERBASEED_ANDROID_KEYSTORE_PASSWORD=verbaseed-ci-password" >> "$GITHUB_ENV"
+          echo "VERBASEED_ANDROID_KEY_ALIAS=verbaseed-ci" >> "$GITHUB_ENV"
+          echo "VERBASEED_ANDROID_KEY_PASSWORD=verbaseed-ci-password" >> "$GITHUB_ENV"
+          echo "VERBASEED_REQUIRE_RELEASE_SIGNING=true" >> "$GITHUB_ENV"
+          echo "CI_ANDROID_CERT_SHA256=$cert" >> "$GITHUB_ENV"
       - name: Generate Drift code
         working-directory: packages/local_store
         run: |
@@ -143,14 +175,50 @@ jobs:
       - name: Resolve app dependencies
         working-directory: apps/learner
         run: flutter pub get
-      - name: Build release APK
+      - name: Build release APK and AAB through production signing path
         working-directory: apps/learner
-        run: flutter build apk --release
-      - name: Upload Android artifact
+        run: |
+          flutter build apk --release
+          flutter build appbundle --release
+      - name: Verify CI-signed Android artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="apps/learner/build/app/outputs/flutter-apk/app-release.apk"
+          aab="apps/learner/build/app/outputs/bundle/release/app-release.aab"
+          apksigner=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner -print \
+            | sort -V | tail -n 1)
+          test -n "$apksigner"
+          "$apksigner" verify --verbose --print-certs "$apk"
+          signer=$(
+            "$apksigner" verify --print-certs "$apk" \
+              | awk -F': ' '/certificate SHA-256 digest:/{print $NF; exit}' \
+              | tr -d '[:space:]:' \
+              | tr '[:upper:]' '[:lower:]'
+          )
+          test "$signer" = "$CI_ANDROID_CERT_SHA256"
+          jarsigner -verify "$aab" >/dev/null
+
+          version_line=$(grep -E '^version:[[:space:]]+' apps/learner/pubspec.yaml | head -n 1)
+          [[ "$version_line" =~ ^version:[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+)\+([0-9]+)$ ]]
+          version_name="${BASH_REMATCH[1]}"
+          version_code="${BASH_REMATCH[2]}"
+          python3 scripts/package_android_release.py \
+            --apk "$apk" \
+            --aab "$aab" \
+            --output-dir build/android-ci-release \
+            --version-name "$version_name" \
+            --version-code "$version_code" \
+            --tag "v$version_name" \
+            --commit "$GITHUB_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --signer-sha256 "$signer"
+          (cd build/android-ci-release && sha256sum --check SHA256SUMS)
+      - name: Upload Android CI release-path evidence
         uses: actions/upload-artifact@v4
         with:
-          name: verbaseed-android-apk
-          path: apps/learner/build/app/outputs/flutter-apk/app-release.apk
+          name: verbaseed-android-ci-build
+          path: build/android-ci-release
           if-no-files-found: error
           retention-days: 14
 

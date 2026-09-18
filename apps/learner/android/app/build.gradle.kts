@@ -4,6 +4,36 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val releaseKeystorePath = providers.environmentVariable("VERBASEED_ANDROID_KEYSTORE_PATH").orNull
+val releaseKeystorePassword = providers.environmentVariable("VERBASEED_ANDROID_KEYSTORE_PASSWORD").orNull
+val releaseKeyAlias = providers.environmentVariable("VERBASEED_ANDROID_KEY_ALIAS").orNull
+val releaseKeyPassword = providers.environmentVariable("VERBASEED_ANDROID_KEY_PASSWORD").orNull
+val releaseSigningRequired = providers.environmentVariable("VERBASEED_REQUIRE_RELEASE_SIGNING")
+    .orNull
+    ?.equals("true", ignoreCase = true) == true
+val releaseSigningValues = listOf(
+    releaseKeystorePath,
+    releaseKeystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+)
+val configuredReleaseSigningValues = releaseSigningValues.count { !it.isNullOrBlank() }
+val hasReleaseSigning = configuredReleaseSigningValues == releaseSigningValues.size
+
+if (configuredReleaseSigningValues != 0 && !hasReleaseSigning) {
+    throw GradleException(
+        "Incomplete VerbaSeed Android release signing configuration. " +
+            "Provide VERBASEED_ANDROID_KEYSTORE_PATH, " +
+            "VERBASEED_ANDROID_KEYSTORE_PASSWORD, VERBASEED_ANDROID_KEY_ALIAS, " +
+            "and VERBASEED_ANDROID_KEY_PASSWORD together.",
+    )
+}
+if (releaseSigningRequired && !hasReleaseSigning) {
+    throw GradleException(
+        "Production Android signing is required, but no complete release signing configuration was supplied.",
+    )
+}
+
 android {
     namespace = "io.github.octoteo.verbaseed"
     compileSdk = flutter.compileSdkVersion
@@ -22,11 +52,28 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseKeystorePath!!)
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // Production signing is intentionally supplied by CI/release secrets later.
-            // Debug signing keeps local and CI release compilation reproducible for now.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                logger.warn(
+                    "VerbaSeed release build is using DEBUG signing because production " +
+                        "signing variables are absent. This artifact is for local/CI validation only.",
+                )
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
