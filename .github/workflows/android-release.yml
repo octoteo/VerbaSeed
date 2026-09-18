@@ -1,0 +1,231 @@
+name: Android production release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing vX.Y.Z tag to publish
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-production-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish signed Android release
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: android-production
+    env:
+      ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+      ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+      ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+      ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+      ANDROID_RELEASE_CERT_SHA256: ${{ vars.ANDROID_RELEASE_CERT_SHA256 }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Validate immutable release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            release_tag='${{ inputs.release_tag }}'
+          else
+            release_tag="${GITHUB_REF_NAME}"
+          fi
+          if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tag must use vX.Y.Z form; got '$release_tag'."
+            exit 1
+          fi
+
+          version_line=$(grep -E '^version:[[:space:]]+' apps/learner/pubspec.yaml | head -n 1)
+          if [[ ! "$version_line" =~ ^version:[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+)\+([0-9]+)$ ]]; then
+            echo "::error::apps/learner/pubspec.yaml must contain version: X.Y.Z+N."
+            exit 1
+          fi
+          version_name="${BASH_REMATCH[1]}"
+          version_code="${BASH_REMATCH[2]}"
+          if [[ "$release_tag" != "v${version_name}" ]]; then
+            echo "::error::Tag $release_tag does not match app version $version_name."
+            exit 1
+          fi
+
+          release_commit=$(git rev-parse HEAD)
+          tag_commit=$(git rev-parse "${release_tag}^{commit}")
+          if [[ "$release_commit" != "$tag_commit" ]]; then
+            echo "::error::Checked-out commit does not match $release_tag."
+            exit 1
+          fi
+          git fetch origin main --depth=1
+          if ! git merge-base --is-ancestor "$release_commit" origin/main; then
+            echo "::error::$release_tag must point to a commit already contained in main."
+            exit 1
+          fi
+          if gh release view "$release_tag" >/dev/null 2>&1; then
+            echo "::error::GitHub Release $release_tag already exists; releases are not overwritten."
+            exit 1
+          fi
+
+          echo "RELEASE_TAG=$release_tag" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_NAME=$version_name" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION_CODE=$version_code" >> "$GITHUB_ENV"
+          echo "RELEASE_COMMIT=$release_commit" >> "$GITHUB_ENV"
+
+      - name: Prepare and pin production signing identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            ANDROID_RELEASE_KEYSTORE_BASE64
+            ANDROID_RELEASE_KEYSTORE_PASSWORD
+            ANDROID_RELEASE_KEY_ALIAS
+            ANDROID_RELEASE_KEY_PASSWORD
+            ANDROID_RELEASE_CERT_SHA256
+          )
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::$name is required in the android-production environment."
+              exit 1
+            fi
+          done
+
+          expected_cert=$(printf '%s' "$ANDROID_RELEASE_CERT_SHA256" \
+            | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')
+          if [[ ! "$expected_cert" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::ANDROID_RELEASE_CERT_SHA256 must be a SHA-256 fingerprint."
+            exit 1
+          fi
+
+          keystore_path="$RUNNER_TEMP/verbaseed-production-release.jks"
+          printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          chmod 600 "$keystore_path"
+          actual_cert=$(keytool -exportcert \
+            -alias "$ANDROID_RELEASE_KEY_ALIAS" \
+            -keystore "$keystore_path" \
+            -storepass:env ANDROID_RELEASE_KEYSTORE_PASSWORD \
+            -rfc \
+            | openssl x509 -outform der \
+            | sha256sum \
+            | awk '{print $1}')
+          if [[ "$actual_cert" != "$expected_cert" ]]; then
+            echo "::error::Configured keystore certificate does not match ANDROID_RELEASE_CERT_SHA256."
+            exit 1
+          fi
+
+          echo "VERBASEED_ANDROID_KEYSTORE_PATH=$keystore_path" >> "$GITHUB_ENV"
+          echo "VERBASEED_ANDROID_KEYSTORE_PASSWORD=$ANDROID_RELEASE_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "VERBASEED_ANDROID_KEY_ALIAS=$ANDROID_RELEASE_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "VERBASEED_ANDROID_KEY_PASSWORD=$ANDROID_RELEASE_KEY_PASSWORD" >> "$GITHUB_ENV"
+          echo "VERBASEED_REQUIRE_RELEASE_SIGNING=true" >> "$GITHUB_ENV"
+          echo "EXPECTED_RELEASE_CERT_SHA256=$expected_cert" >> "$GITHUB_ENV"
+
+      - name: Generate Drift code
+        working-directory: packages/local_store
+        run: |
+          flutter pub get
+          dart run build_runner build
+
+      - name: Verify learner application
+        working-directory: apps/learner
+        run: |
+          flutter pub get
+          flutter analyze --fatal-infos
+          flutter test
+
+      - name: Build production-signed APK and AAB
+        working-directory: apps/learner
+        run: |
+          flutter build apk --release
+          flutter build appbundle --release
+
+      - name: Verify release signatures
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="apps/learner/build/app/outputs/flutter-apk/app-release.apk"
+          aab="apps/learner/build/app/outputs/bundle/release/app-release.aab"
+          apksigner=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner -print \
+            | sort -V | tail -n 1)
+          if [[ -z "$apksigner" ]]; then
+            echo "::error::Android apksigner was not found."
+            exit 1
+          fi
+          "$apksigner" verify --verbose --print-certs "$apk"
+          signer=$(
+            "$apksigner" verify --print-certs "$apk" \
+              | awk -F': ' '/certificate SHA-256 digest:/{print $NF; exit}' \
+              | tr -d '[:space:]:' \
+              | tr '[:upper:]' '[:lower:]'
+          )
+          if [[ "$signer" != "$EXPECTED_RELEASE_CERT_SHA256" ]]; then
+            echo "::error::APK signer fingerprint does not match the pinned production certificate."
+            exit 1
+          fi
+          jarsigner -verify "$aab" >/dev/null
+          echo "APK_SIGNER_SHA256=$signer" >> "$GITHUB_ENV"
+
+      - name: Package immutable release assets
+        run: |
+          python3 scripts/package_android_release.py \
+            --apk apps/learner/build/app/outputs/flutter-apk/app-release.apk \
+            --aab apps/learner/build/app/outputs/bundle/release/app-release.aab \
+            --output-dir build/android-release \
+            --version-name "$RELEASE_VERSION_NAME" \
+            --version-code "$RELEASE_VERSION_CODE" \
+            --tag "$RELEASE_TAG" \
+            --commit "$RELEASE_COMMIT" \
+            --repository "$GITHUB_REPOSITORY" \
+            --signer-sha256 "$APK_SIGNER_SHA256"
+          (cd build/android-release && sha256sum --check SHA256SUMS)
+
+      - name: Upload signed release evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: verbaseed-android-release-${{ env.RELEASE_VERSION_NAME }}
+          path: build/android-release
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish immutable GitHub Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" \
+            build/android-release/verbaseed-android.apk \
+            build/android-release/verbaseed-android.aab \
+            build/android-release/android-release-manifest.json \
+            build/android-release/SHA256SUMS \
+            --verify-tag \
+            --title "VerbaSeed $RELEASE_VERSION_NAME" \
+            --generate-notes
+
+      - name: Release summary
+        run: |
+          {
+            echo "### VerbaSeed Android $RELEASE_VERSION_NAME"
+            echo ""
+            echo "- Tag: \`$RELEASE_TAG\`"
+            echo "- Commit: \`$RELEASE_COMMIT\`"
+            echo "- Version code: \`$RELEASE_VERSION_CODE\`"
+            echo "- Signing certificate SHA-256: \`$APK_SIGNER_SHA256\`"
+            echo "- Manifest: \`android-release-manifest.json\`"
+            echo "- Checksums: \`SHA256SUMS\`"
+          } >> "$GITHUB_STEP_SUMMARY"

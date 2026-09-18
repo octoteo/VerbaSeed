@@ -9,7 +9,7 @@
 - GitHub Actions quality gates
 - Vercel production deployment
 
-## v0.2 — local-first learner state (in progress)
+## v0.2 — local-first learner state (complete)
 
 Completed foundation:
 
@@ -65,10 +65,11 @@ Completed foundation:
 - Confirmed GitHub upgrades install exactly the previewed commit, reject stale previews, preserve existing learner pins and remain rollbackable through local version history
 - Portable versioned JSON backup/export/import covers learner profiles, FSRS cards/events, learner course pins, installed-course history, referenced source provenance and every historical installed course manifest
 - Restore validates schema, references and SHA-256 course assets before replacing local state; database replacement is transactional and excludes ordinary transient import jobs
+- Android production signing configuration is fail-closed when production signing is required and rejects partial secret configuration
+- CI exercises the production signing path with an ephemeral key and verifies signed APK/AAB artifacts without exposing the real release key
+- Tagged Android releases require a main-contained version-matching tag, pin the expected signing certificate SHA-256 and publish immutable GitHub Release assets with checksums and a machine-readable manifest
 
-Next v0.2 increments:
-
-- Production Android signing and release-distribution workflow
+Next planned work starts in v0.3.
 
 ## v0.3 — early learning content
 

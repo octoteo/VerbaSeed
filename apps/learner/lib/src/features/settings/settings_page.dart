@@ -62,7 +62,7 @@ class SettingsPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('VerbaSeed 0.2.13', style: Theme.of(context).textTheme.titleMedium),
+                Text('VerbaSeed 0.2.14', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
                 const Text('AGPL-3.0 · Local-first · Drift/SQLite · Open Course Protocol'),
               ],
